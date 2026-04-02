@@ -482,3 +482,16 @@ $RECYCLE.BIN/
 
 # Vim temporary swap files
 *.swp
+
+# Node.js
+node_modules/
+dist/
+build/
+.env
+.eslintcache
+
+# Expo (для мобилки)
+.expo/
+*.jks
+*.p8
+*.pyc

@@ -27,7 +27,7 @@
 
 | Layer | Technologies |
 | :--- | :--- |
-| **Backend** | .NET 8 Web API, Entity Framework Core, SignalR, JWT Auth |
+| **Backend** | .NET 9 Web API, Entity Framework Core, SignalR, JWT Auth |
 | **Database** | PostgreSQL, Redis (Caching & Sessions) |
 | **Frontend** | React 18, Tailwind CSS, Framer Motion |
 | **Mobile** | React Native (Expo) |

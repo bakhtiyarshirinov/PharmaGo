@@ -1,4 +1,5 @@
 using PharmaGo.Infrastructure;
+using PharmaGo.Infrastructure.Persistence;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -8,12 +9,18 @@ builder.Services.AddControllers();
 
 var app = builder.Build();
 
+await app.Services.InitializeDatabaseAsync();
+
 if (app.Environment.IsDevelopment())
 {
     app.MapOpenApi();
 }
 
-app.UseHttpsRedirection();
+if (!app.Environment.IsDevelopment())
+{
+    app.UseHttpsRedirection();
+}
+
 app.MapControllers();
 
 app.Run();

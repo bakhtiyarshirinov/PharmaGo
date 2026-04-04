@@ -2,8 +2,7 @@ namespace PharmaGo.Domain.Models.Enums;
 
 public enum UserRole
 {
-    Customer = 1,
+    User = 1,
     Pharmacist = 2,
-    Manager = 3,
-    Admin = 4
+    Moderator = 3
 }

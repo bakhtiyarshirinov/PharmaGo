@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using Microsoft.AspNetCore.Identity;
 using PharmaGo.Domain.Models;
 using PharmaGo.Domain.Models.Enums;
 
@@ -8,209 +9,252 @@ public static class ApplicationDbContextSeeder
 {
     public static async Task SeedAsync(ApplicationDbContext context, CancellationToken cancellationToken = default)
     {
-        if (await context.Medicines.AnyAsync(cancellationToken))
+        var passwordHasher = new PasswordHasher<AppUser>();
+
+        var hasMedicines = await context.Medicines.AnyAsync(cancellationToken);
+        if (!hasMedicines)
         {
-            return;
+            var analgesicsCategory = new MedicineCategory
+            {
+                Name = "Analgesics",
+                Description = "Pain relief and fever reducing medicines."
+            };
+
+            var antibioticsCategory = new MedicineCategory
+            {
+                Name = "Antibiotics",
+                Description = "Prescription medicines for bacterial infections."
+            };
+
+            var chain = new PharmacyChain
+            {
+                Name = "PharmaGo Care",
+                LegalName = "PharmaGo Care LLC",
+                SupportPhone = "+994501112233",
+                SupportEmail = "support@pharmago.local"
+            };
+
+            var centralPharmacy = new Pharmacy
+            {
+                Name = "PharmaGo Central",
+                Address = "28 May Street 15",
+                City = "Baku",
+                Region = "Nasimi",
+                PhoneNumber = "+994501001122",
+                Latitude = "40.3777",
+                Longitude = "49.8920",
+                IsOpen24Hours = true,
+                PharmacyChain = chain
+            };
+
+            var northPharmacy = new Pharmacy
+            {
+                Name = "PharmaGo North",
+                Address = "Koroglu Rahimov Street 8",
+                City = "Baku",
+                Region = "Narimanov",
+                PhoneNumber = "+994501003344",
+                Latitude = "40.4093",
+                Longitude = "49.8671",
+                IsOpen24Hours = false,
+                PharmacyChain = chain
+            };
+
+            var depot = new Depot
+            {
+                Name = "PharmaGo Main Depot",
+                Address = "Industrial Zone 4",
+                City = "Baku",
+                ContactPhone = "+994501005566",
+                ContactEmail = "depot@pharmago.local"
+            };
+
+            var paracetamol = new Medicine
+            {
+                BrandName = "Panadol",
+                GenericName = "Paracetamol",
+                Description = "Pain relief and fever reducer.",
+                DosageForm = "Tablet",
+                Strength = "500 mg",
+                Manufacturer = "GSK",
+                CountryOfOrigin = "UK",
+                Barcode = "1111111111111",
+                RequiresPrescription = false,
+                Category = analgesicsCategory
+            };
+
+            var ibuprofen = new Medicine
+            {
+                BrandName = "Nurofen",
+                GenericName = "Ibuprofen",
+                Description = "Anti-inflammatory pain relief.",
+                DosageForm = "Tablet",
+                Strength = "200 mg",
+                Manufacturer = "Reckitt",
+                CountryOfOrigin = "UK",
+                Barcode = "2222222222222",
+                RequiresPrescription = false,
+                Category = analgesicsCategory
+            };
+
+            var amoxicillin = new Medicine
+            {
+                BrandName = "Amoxil",
+                GenericName = "Amoxicillin",
+                Description = "Broad-spectrum antibiotic.",
+                DosageForm = "Capsule",
+                Strength = "500 mg",
+                Manufacturer = "Sandoz",
+                CountryOfOrigin = "Germany",
+                Barcode = "3333333333333",
+                RequiresPrescription = true,
+                Category = antibioticsCategory
+            };
+
+            var stockItems = new[]
+            {
+                new StockItem
+                {
+                    Pharmacy = centralPharmacy,
+                    Medicine = paracetamol,
+                    BatchNumber = "PAN-500-A1",
+                    ExpirationDate = DateOnly.FromDateTime(DateTime.UtcNow.AddYears(1)),
+                    Quantity = 120,
+                    ReservedQuantity = 0,
+                    PurchasePrice = 1.20m,
+                    RetailPrice = 2.50m,
+                    ReorderLevel = 20
+                },
+                new StockItem
+                {
+                    Pharmacy = centralPharmacy,
+                    Medicine = ibuprofen,
+                    BatchNumber = "NUR-200-A1",
+                    ExpirationDate = DateOnly.FromDateTime(DateTime.UtcNow.AddYears(1)),
+                    Quantity = 75,
+                    ReservedQuantity = 0,
+                    PurchasePrice = 1.80m,
+                    RetailPrice = 3.40m,
+                    ReorderLevel = 15
+                },
+                new StockItem
+                {
+                    Pharmacy = northPharmacy,
+                    Medicine = paracetamol,
+                    BatchNumber = "PAN-500-B1",
+                    ExpirationDate = DateOnly.FromDateTime(DateTime.UtcNow.AddMonths(10)),
+                    Quantity = 40,
+                    ReservedQuantity = 0,
+                    PurchasePrice = 1.10m,
+                    RetailPrice = 2.30m,
+                    ReorderLevel = 10
+                },
+                new StockItem
+                {
+                    Pharmacy = northPharmacy,
+                    Medicine = amoxicillin,
+                    BatchNumber = "AMX-500-B1",
+                    ExpirationDate = DateOnly.FromDateTime(DateTime.UtcNow.AddMonths(8)),
+                    Quantity = 25,
+                    ReservedQuantity = 0,
+                    PurchasePrice = 3.50m,
+                    RetailPrice = 6.80m,
+                    ReorderLevel = 8
+                }
+            };
+
+            var supplierMedicines = new[]
+            {
+                new SupplierMedicine
+                {
+                    Depot = depot,
+                    Medicine = paracetamol,
+                    WholesalePrice = 1.00m,
+                    AvailableQuantity = 500,
+                    MinimumOrderQuantity = 50,
+                    EstimatedDeliveryHours = 6
+                },
+                new SupplierMedicine
+                {
+                    Depot = depot,
+                    Medicine = ibuprofen,
+                    WholesalePrice = 1.55m,
+                    AvailableQuantity = 300,
+                    MinimumOrderQuantity = 30,
+                    EstimatedDeliveryHours = 6
+                },
+                new SupplierMedicine
+                {
+                    Depot = depot,
+                    Medicine = amoxicillin,
+                    WholesalePrice = 3.10m,
+                    AvailableQuantity = 200,
+                    MinimumOrderQuantity = 20,
+                    EstimatedDeliveryHours = 8
+                }
+            };
+
+            await context.MedicineCategories.AddRangeAsync([analgesicsCategory, antibioticsCategory], cancellationToken);
+            await context.PharmacyChains.AddAsync(chain, cancellationToken);
+            await context.Pharmacies.AddRangeAsync([centralPharmacy, northPharmacy], cancellationToken);
+            await context.Depots.AddAsync(depot, cancellationToken);
+            await context.Medicines.AddRangeAsync([paracetamol, ibuprofen, amoxicillin], cancellationToken);
+            await context.StockItems.AddRangeAsync(stockItems, cancellationToken);
+            await context.SupplierMedicines.AddRangeAsync(supplierMedicines, cancellationToken);
         }
 
-        var analgesicsCategory = new MedicineCategory
-        {
-            Name = "Analgesics",
-            Description = "Pain relief and fever reducing medicines."
-        };
+        var pharmacies = await context.Pharmacies.OrderBy(x => x.Name).ToListAsync(cancellationToken);
+        var central = pharmacies.FirstOrDefault(x => x.Name == "PharmaGo Central");
 
-        var antibioticsCategory = new MedicineCategory
+        var pharmacist = await context.Users.FirstOrDefaultAsync(x => x.PhoneNumber == "+994500000001", cancellationToken);
+        if (pharmacist is null)
         {
-            Name = "Antibiotics",
-            Description = "Prescription medicines for bacterial infections."
-        };
-
-        var chain = new PharmacyChain
-        {
-            Name = "PharmaGo Care",
-            LegalName = "PharmaGo Care LLC",
-            SupportPhone = "+994501112233",
-            SupportEmail = "support@pharmago.local"
-        };
-
-        var centralPharmacy = new Pharmacy
-        {
-            Name = "PharmaGo Central",
-            Address = "28 May Street 15",
-            City = "Baku",
-            Region = "Nasimi",
-            PhoneNumber = "+994501001122",
-            Latitude = "40.3777",
-            Longitude = "49.8920",
-            IsOpen24Hours = true,
-            PharmacyChain = chain
-        };
-
-        var northPharmacy = new Pharmacy
-        {
-            Name = "PharmaGo North",
-            Address = "Koroglu Rahimov Street 8",
-            City = "Baku",
-            Region = "Narimanov",
-            PhoneNumber = "+994501003344",
-            Latitude = "40.4093",
-            Longitude = "49.8671",
-            IsOpen24Hours = false,
-            PharmacyChain = chain
-        };
-
-        var depot = new Depot
-        {
-            Name = "PharmaGo Main Depot",
-            Address = "Industrial Zone 4",
-            City = "Baku",
-            ContactPhone = "+994501005566",
-            ContactEmail = "depot@pharmago.local"
-        };
-
-        var paracetamol = new Medicine
-        {
-            BrandName = "Panadol",
-            GenericName = "Paracetamol",
-            Description = "Pain relief and fever reducer.",
-            DosageForm = "Tablet",
-            Strength = "500 mg",
-            Manufacturer = "GSK",
-            CountryOfOrigin = "UK",
-            Barcode = "1111111111111",
-            RequiresPrescription = false,
-            Category = analgesicsCategory
-        };
-
-        var ibuprofen = new Medicine
-        {
-            BrandName = "Nurofen",
-            GenericName = "Ibuprofen",
-            Description = "Anti-inflammatory pain relief.",
-            DosageForm = "Tablet",
-            Strength = "200 mg",
-            Manufacturer = "Reckitt",
-            CountryOfOrigin = "UK",
-            Barcode = "2222222222222",
-            RequiresPrescription = false,
-            Category = analgesicsCategory
-        };
-
-        var amoxicillin = new Medicine
-        {
-            BrandName = "Amoxil",
-            GenericName = "Amoxicillin",
-            Description = "Broad-spectrum antibiotic.",
-            DosageForm = "Capsule",
-            Strength = "500 mg",
-            Manufacturer = "Sandoz",
-            CountryOfOrigin = "Germany",
-            Barcode = "3333333333333",
-            RequiresPrescription = true,
-            Category = antibioticsCategory
-        };
-
-        var pharmacist = new AppUser
-        {
-            FirstName = "Leyla",
-            LastName = "Mammadova",
-            PhoneNumber = "+994500000001",
-            Email = "pharmacist@pharmago.local",
-            Role = UserRole.Pharmacist,
-            Pharmacy = centralPharmacy
-        };
-
-        var stockItems = new[]
-        {
-            new StockItem
+            pharmacist = new AppUser
             {
-                Pharmacy = centralPharmacy,
-                Medicine = paracetamol,
-                BatchNumber = "PAN-500-A1",
-                ExpirationDate = DateOnly.FromDateTime(DateTime.UtcNow.AddYears(1)),
-                Quantity = 120,
-                ReservedQuantity = 0,
-                PurchasePrice = 1.20m,
-                RetailPrice = 2.50m,
-                ReorderLevel = 20
-            },
-            new StockItem
-            {
-                Pharmacy = centralPharmacy,
-                Medicine = ibuprofen,
-                BatchNumber = "NUR-200-A1",
-                ExpirationDate = DateOnly.FromDateTime(DateTime.UtcNow.AddYears(1)),
-                Quantity = 75,
-                ReservedQuantity = 0,
-                PurchasePrice = 1.80m,
-                RetailPrice = 3.40m,
-                ReorderLevel = 15
-            },
-            new StockItem
-            {
-                Pharmacy = northPharmacy,
-                Medicine = paracetamol,
-                BatchNumber = "PAN-500-B1",
-                ExpirationDate = DateOnly.FromDateTime(DateTime.UtcNow.AddMonths(10)),
-                Quantity = 40,
-                ReservedQuantity = 0,
-                PurchasePrice = 1.10m,
-                RetailPrice = 2.30m,
-                ReorderLevel = 10
-            },
-            new StockItem
-            {
-                Pharmacy = northPharmacy,
-                Medicine = amoxicillin,
-                BatchNumber = "AMX-500-B1",
-                ExpirationDate = DateOnly.FromDateTime(DateTime.UtcNow.AddMonths(8)),
-                Quantity = 25,
-                ReservedQuantity = 0,
-                PurchasePrice = 3.50m,
-                RetailPrice = 6.80m,
-                ReorderLevel = 8
-            }
-        };
-
-        var supplierMedicines = new[]
+                FirstName = "Leyla",
+                LastName = "Mammadova",
+                PhoneNumber = "+994500000001",
+                Email = "pharmacist@pharmago.local",
+                Role = UserRole.Pharmacist,
+                PharmacyId = central?.Id
+            };
+            await context.Users.AddAsync(pharmacist, cancellationToken);
+        }
+        else
         {
-            new SupplierMedicine
-            {
-                Depot = depot,
-                Medicine = paracetamol,
-                WholesalePrice = 1.00m,
-                AvailableQuantity = 500,
-                MinimumOrderQuantity = 50,
-                EstimatedDeliveryHours = 6
-            },
-            new SupplierMedicine
-            {
-                Depot = depot,
-                Medicine = ibuprofen,
-                WholesalePrice = 1.55m,
-                AvailableQuantity = 300,
-                MinimumOrderQuantity = 30,
-                EstimatedDeliveryHours = 6
-            },
-            new SupplierMedicine
-            {
-                Depot = depot,
-                Medicine = amoxicillin,
-                WholesalePrice = 3.10m,
-                AvailableQuantity = 200,
-                MinimumOrderQuantity = 20,
-                EstimatedDeliveryHours = 8
-            }
-        };
+            pharmacist.FirstName = "Leyla";
+            pharmacist.LastName = "Mammadova";
+            pharmacist.Email = "pharmacist@pharmago.local";
+            pharmacist.Role = UserRole.Pharmacist;
+            pharmacist.PharmacyId = central?.Id;
+            pharmacist.IsActive = true;
+        }
 
-        await context.MedicineCategories.AddRangeAsync([analgesicsCategory, antibioticsCategory], cancellationToken);
-        await context.PharmacyChains.AddAsync(chain, cancellationToken);
-        await context.Pharmacies.AddRangeAsync([centralPharmacy, northPharmacy], cancellationToken);
-        await context.Depots.AddAsync(depot, cancellationToken);
-        await context.Medicines.AddRangeAsync([paracetamol, ibuprofen, amoxicillin], cancellationToken);
-        await context.Users.AddAsync(pharmacist, cancellationToken);
-        await context.StockItems.AddRangeAsync(stockItems, cancellationToken);
-        await context.SupplierMedicines.AddRangeAsync(supplierMedicines, cancellationToken);
+        pharmacist.PasswordHash = passwordHasher.HashPassword(pharmacist, "Pharmacist123!");
+
+        var moderator = await context.Users.FirstOrDefaultAsync(x => x.PhoneNumber == "+994500000002", cancellationToken);
+        if (moderator is null)
+        {
+            moderator = new AppUser
+            {
+                FirstName = "Nigar",
+                LastName = "Aliyeva",
+                PhoneNumber = "+994500000002",
+                Email = "moderator@pharmago.local",
+                Role = UserRole.Moderator
+            };
+            await context.Users.AddAsync(moderator, cancellationToken);
+        }
+        else
+        {
+            moderator.FirstName = "Nigar";
+            moderator.LastName = "Aliyeva";
+            moderator.Email = "moderator@pharmago.local";
+            moderator.Role = UserRole.Moderator;
+            moderator.IsActive = true;
+        }
+
+        moderator.PasswordHash = passwordHasher.HashPassword(moderator, "Moderator123!");
 
         await context.SaveChangesAsync(cancellationToken);
     }

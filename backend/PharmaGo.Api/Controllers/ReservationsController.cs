@@ -1,3 +1,5 @@
+using System.Security.Claims;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using PharmaGo.Application.Abstractions;
@@ -5,13 +7,15 @@ using PharmaGo.Application.Reservations.Commands.CreateReservation;
 using PharmaGo.Application.Reservations.Queries.GetReservation;
 using PharmaGo.Domain.Models;
 using PharmaGo.Domain.Models.Enums;
+using PharmaGo.Infrastructure.Auth;
 
 namespace PharmaGo.Api.Controllers;
 
 [ApiController]
 [Route("api/[controller]")]
-public class ReservationsController(IApplicationDbContext context) : ControllerBase
+public class ReservationsController(IApplicationDbContext context, ICurrentUserService currentUserService) : ControllerBase
 {
+    [Authorize]
     [HttpGet("{id:guid}")]
     [ProducesResponseType(typeof(ReservationResponse), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
@@ -45,9 +49,21 @@ public class ReservationsController(IApplicationDbContext context) : ControllerB
             })
             .FirstOrDefaultAsync(cancellationToken);
 
-        return reservation is null ? NotFound() : Ok(reservation);
+        if (reservation is null)
+        {
+            return NotFound();
+        }
+
+        var isStaff = User.IsInRole(RoleNames.Pharmacist) || User.IsInRole(RoleNames.Moderator);
+        if (!isStaff && reservation.CustomerId != currentUserService.UserId)
+        {
+            return Forbid();
+        }
+
+        return Ok(reservation);
     }
 
+    [Authorize]
     [HttpPost]
     [ProducesResponseType(typeof(ReservationResponse), StatusCodes.Status201Created)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
@@ -108,34 +124,18 @@ public class ReservationsController(IApplicationDbContext context) : ControllerB
             }
         }
 
+        if (!currentUserService.UserId.HasValue)
+        {
+            return Unauthorized();
+        }
+
         var customer = await context.Users.FirstOrDefaultAsync(
-            x => x.PhoneNumber == request.PhoneNumber,
+            x => x.Id == currentUserService.UserId.Value && x.IsActive,
             cancellationToken);
 
         if (customer is null)
         {
-            customer = new AppUser
-            {
-                FirstName = request.FirstName.Trim(),
-                LastName = request.LastName.Trim(),
-                PhoneNumber = request.PhoneNumber.Trim(),
-                Email = request.Email?.Trim(),
-                TelegramUsername = request.TelegramUsername?.Trim(),
-                TelegramChatId = request.TelegramChatId?.Trim(),
-                Role = UserRole.Customer,
-                IsActive = true
-            };
-
-            await context.Users.AddAsync(customer, cancellationToken);
-        }
-        else
-        {
-            customer.FirstName = request.FirstName.Trim();
-            customer.LastName = request.LastName.Trim();
-            customer.Email = request.Email?.Trim();
-            customer.TelegramUsername = request.TelegramUsername?.Trim();
-            customer.TelegramChatId = request.TelegramChatId?.Trim();
-            customer.IsActive = true;
+            return Unauthorized();
         }
 
         var reservation = new Reservation
@@ -147,7 +147,7 @@ public class ReservationsController(IApplicationDbContext context) : ControllerB
             Notes = request.Notes?.Trim(),
             ReservedUntilUtc = DateTime.UtcNow.AddHours(request.ReserveForHours),
             ConfirmedAtUtc = DateTime.UtcNow,
-            TelegramChatId = request.TelegramChatId?.Trim()
+            TelegramChatId = customer.TelegramChatId
         };
 
         foreach (var item in request.Items)

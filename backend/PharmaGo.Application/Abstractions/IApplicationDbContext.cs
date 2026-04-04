@@ -12,6 +12,7 @@ public interface IApplicationDbContext
     DbSet<MedicineCategory> MedicineCategories { get; }
     DbSet<Pharmacy> Pharmacies { get; }
     DbSet<PharmacyChain> PharmacyChains { get; }
+    DbSet<RefreshToken> RefreshTokens { get; }
     DbSet<Reservation> Reservations { get; }
     DbSet<ReservationItem> ReservationItems { get; }
     DbSet<StockItem> StockItems { get; }

@@ -11,11 +11,20 @@ Endpoints:
   - anonymous
   - creates a new `User`
   - stores password with ASP.NET Core `PasswordHasher`
-  - returns JWT token and profile
+  - returns access token, refresh token and profile
 - `POST /api/auth/login`
   - anonymous
   - validates phone number and password
-  - returns JWT token and profile
+  - returns access token, refresh token and profile
+- `POST /api/auth/refresh`
+  - anonymous
+  - rotates refresh token and returns a new auth response
+- `POST /api/auth/logout`
+  - authenticated
+  - revokes the provided refresh token for the current user session
+- `POST /api/auth/revoke-all`
+  - authenticated
+  - revokes all active refresh tokens for the current user
 - `GET /api/auth/me`
   - authenticated
   - returns current user profile from JWT identity
@@ -26,6 +35,8 @@ Endpoints:
 Important details:
 - writes audit records for registration and role changes
 - embeds `pharmacy_id` into JWT when user belongs to a pharmacy
+- stores only hashed refresh tokens in the database
+- uses refresh token rotation on every successful refresh request
 
 ## MedicinesController
 File: `backend/PharmaGo.Api/Controllers/MedicinesController.cs`

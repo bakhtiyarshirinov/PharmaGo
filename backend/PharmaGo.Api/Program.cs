@@ -74,3 +74,7 @@ app.MapHub<NotificationHub>("/hubs/notifications");
 app.MapHealthChecks("/health", new HealthCheckOptions());
 
 app.Run();
+
+public partial class Program
+{
+}

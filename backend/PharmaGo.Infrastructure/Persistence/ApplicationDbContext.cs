@@ -14,6 +14,7 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
     public DbSet<MedicineCategory> MedicineCategories => Set<MedicineCategory>();
     public DbSet<Pharmacy> Pharmacies => Set<Pharmacy>();
     public DbSet<PharmacyChain> PharmacyChains => Set<PharmacyChain>();
+    public DbSet<RefreshToken> RefreshTokens => Set<RefreshToken>();
     public DbSet<Reservation> Reservations => Set<Reservation>();
     public DbSet<ReservationItem> ReservationItems => Set<ReservationItem>();
     public DbSet<StockItem> StockItems => Set<StockItem>();

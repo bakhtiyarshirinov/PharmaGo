@@ -18,4 +18,5 @@ public class AppUser : BaseEntity
     public Pharmacy? Pharmacy { get; set; }
 
     public ICollection<Reservation> Reservations { get; set; } = new List<Reservation>();
+    public ICollection<RefreshToken> RefreshTokens { get; set; } = new List<RefreshToken>();
 }

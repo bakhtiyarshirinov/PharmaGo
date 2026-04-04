@@ -42,12 +42,15 @@ This file documents the purpose of every backend source file currently in the re
 - `backend/PharmaGo.Application/Abstractions/IAuditService.cs`: contract for writing audit trail records.
 - `backend/PharmaGo.Application/Abstractions/ICurrentUserService.cs`: contract for reading current authenticated user identity from request context.
 - `backend/PharmaGo.Application/Abstractions/IJwtTokenGenerator.cs`: contract for JWT access token generation.
+- `backend/PharmaGo.Application/Abstractions/IRefreshTokenService.cs`: contract for issuing, loading and revoking refresh tokens.
 - `backend/PharmaGo.Application/Abstractions/IReservationStateService.cs`: contract for releasing and completing reserved stock safely.
 
 ### Auth Contracts
 - `backend/PharmaGo.Application/Auth/Contracts/AuthResponse.cs`: login and registration response with token, expiry and user profile.
 - `backend/PharmaGo.Application/Auth/Contracts/LoginRequest.cs`: login payload model with validation attributes.
+- `backend/PharmaGo.Application/Auth/Contracts/LogoutRequest.cs`: logout payload carrying the refresh token to revoke.
 - `backend/PharmaGo.Application/Auth/Contracts/RegisterRequest.cs`: registration payload model with validation attributes.
+- `backend/PharmaGo.Application/Auth/Contracts/RefreshTokenRequest.cs`: refresh payload carrying the current refresh token.
 - `backend/PharmaGo.Application/Auth/Contracts/UpdateUserRoleRequest.cs`: moderator request model for changing a user role.
 - `backend/PharmaGo.Application/Auth/Contracts/UserProfileResponse.cs`: normalized user profile DTO returned by auth endpoints.
 
@@ -88,6 +91,7 @@ This file documents the purpose of every backend source file currently in the re
 - `backend/PharmaGo.Domain/Models/MedicineCategory.cs`: medicine category or therapeutic group entity.
 - `backend/PharmaGo.Domain/Models/PharmacyChain.cs`: pharmacy network root entity for grouping branches.
 - `backend/PharmaGo.Domain/Models/Pharmacy.cs`: pharmacy branch entity with contact and location data.
+- `backend/PharmaGo.Domain/Models/RefreshToken.cs`: persisted refresh token record with revocation and rotation metadata.
 - `backend/PharmaGo.Domain/Models/Depot.cs`: wholesale depot or warehouse entity used for upstream supply.
 - `backend/PharmaGo.Domain/Models/StockItem.cs`: per-batch stock record with availability, pricing and reorder logic.
 - `backend/PharmaGo.Domain/Models/Reservation.cs`: reservation aggregate root with status, customer, pharmacy and reserved-until timestamp.
@@ -108,6 +112,7 @@ This file documents the purpose of every backend source file currently in the re
 - `backend/PharmaGo.Infrastructure/Auth/CurrentUserService.cs`: reads JWT claims from `HttpContext` and exposes current user information.
 - `backend/PharmaGo.Infrastructure/Auth/JwtSettings.cs`: configuration model for issuer, audience, secret and access token lifetime.
 - `backend/PharmaGo.Infrastructure/Auth/JwtTokenGenerator.cs`: creates signed JWT access tokens with role and pharmacy claims.
+- `backend/PharmaGo.Infrastructure/Auth/RefreshTokenSettings.cs`: configuration model for refresh token lifetime.
 - `backend/PharmaGo.Infrastructure/Auth/RoleNames.cs`: shared role and policy names used by controllers and auth setup.
 
 ### Persistence
@@ -123,6 +128,7 @@ This file documents the purpose of every backend source file currently in the re
 - `backend/PharmaGo.Infrastructure/Persistence/Configurations/MedicineConfiguration.cs`: EF mapping for medicines and their constraints.
 - `backend/PharmaGo.Infrastructure/Persistence/Configurations/PharmacyChainConfiguration.cs`: EF mapping for pharmacy chains.
 - `backend/PharmaGo.Infrastructure/Persistence/Configurations/PharmacyConfiguration.cs`: EF mapping for pharmacies and chain relation.
+- `backend/PharmaGo.Infrastructure/Persistence/Configurations/RefreshTokenConfiguration.cs`: EF mapping for stored refresh tokens and lookup indexes.
 - `backend/PharmaGo.Infrastructure/Persistence/Configurations/ReservationConfiguration.cs`: EF mapping for reservation header table and indexes.
 - `backend/PharmaGo.Infrastructure/Persistence/Configurations/ReservationItemConfiguration.cs`: EF mapping for reservation line items.
 - `backend/PharmaGo.Infrastructure/Persistence/Configurations/StockItemConfiguration.cs`: EF mapping for inventory batches and uniqueness constraints.
@@ -135,8 +141,25 @@ This file documents the purpose of every backend source file currently in the re
 - `backend/PharmaGo.Infrastructure/Persistence/Migrations/20260404185811_AddJwtAuthAndUserCredentials.Designer.cs`: EF-generated metadata for the JWT/auth migration.
 - `backend/PharmaGo.Infrastructure/Persistence/Migrations/20260404193239_AddAuditLogs.cs`: schema update adding persistent audit log storage.
 - `backend/PharmaGo.Infrastructure/Persistence/Migrations/20260404193239_AddAuditLogs.Designer.cs`: EF-generated metadata for the audit log migration.
+- `backend/PharmaGo.Infrastructure/Persistence/Migrations/20260404201759_AddRefreshTokens.cs`: schema update adding refresh token persistence.
+- `backend/PharmaGo.Infrastructure/Persistence/Migrations/20260404201759_AddRefreshTokens.Designer.cs`: EF-generated metadata for the refresh token migration.
 - `backend/PharmaGo.Infrastructure/Persistence/Migrations/ApplicationDbContextModelSnapshot.cs`: latest EF model snapshot used for future migration diffs.
 
 ### Services
 - `backend/PharmaGo.Infrastructure/Services/AuditService.cs`: writes persisted audit records to the database.
+- `backend/PharmaGo.Infrastructure/Services/RefreshTokenService.cs`: generates, hashes, rotates and revokes refresh tokens.
 - `backend/PharmaGo.Infrastructure/Services/ReservationStateService.cs`: encapsulates stock release and stock deduction rules for reservation state changes.
+
+## PharmaGo.IntegrationTests
+
+### Project
+- `backend/PharmaGo.IntegrationTests/PharmaGo.IntegrationTests.csproj`: integration test project using xUnit and ASP.NET Core test host.
+- `backend/PharmaGo.IntegrationTests/AssemblyInfo.cs`: disables test parallelization to keep the shared PostgreSQL test database deterministic.
+
+### Test Infrastructure
+- `backend/PharmaGo.IntegrationTests/Infrastructure/CustomWebApplicationFactory.cs`: custom `WebApplicationFactory` that points the app to a dedicated PostgreSQL test database and resets schema between tests.
+- `backend/PharmaGo.IntegrationTests/Infrastructure/JsonExtensions.cs`: shared JSON deserialization helpers for HTTP test responses.
+
+### Test Suites
+- `backend/PharmaGo.IntegrationTests/Auth/AuthFlowTests.cs`: covers register, refresh rotation, logout and revoke-all flows.
+- `backend/PharmaGo.IntegrationTests/Reservations/ReservationFlowTests.cs`: covers authenticated reservation creation and pharmacist completion workflow.

@@ -10,7 +10,15 @@ public static class DatabaseInitializationExtensions
         using var scope = services.CreateScope();
         var context = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
 
-        await context.Database.MigrateAsync(cancellationToken);
+        if (context.Database.IsNpgsql())
+        {
+            await context.Database.MigrateAsync(cancellationToken);
+        }
+        else
+        {
+            await context.Database.EnsureCreatedAsync(cancellationToken);
+        }
+
         await ApplicationDbContextSeeder.SeedAsync(context, cancellationToken);
     }
 }

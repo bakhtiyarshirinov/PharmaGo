@@ -28,5 +28,10 @@ public class AppUserConfiguration : IEntityTypeConfiguration<AppUser>
             .WithMany(x => x.Employees)
             .HasForeignKey(x => x.PharmacyId)
             .OnDelete(DeleteBehavior.SetNull);
+
+        builder.HasMany(x => x.RefreshTokens)
+            .WithOne(x => x.User)
+            .HasForeignKey(x => x.UserId)
+            .OnDelete(DeleteBehavior.Cascade);
     }
 }

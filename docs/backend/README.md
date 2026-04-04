@@ -17,6 +17,7 @@ The backend solves four main business flows:
 
 ## Runtime Features
 - JWT bearer authentication
+- refresh tokens with rotation and revocation
 - roles: `User`, `Pharmacist`, `Moderator`
 - PostgreSQL persistence through EF Core
 - automatic migrations on startup

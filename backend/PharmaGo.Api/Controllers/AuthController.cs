@@ -16,6 +16,7 @@ namespace PharmaGo.Api.Controllers;
 public class AuthController(
     IApplicationDbContext context,
     IAuditService auditService,
+    IRefreshTokenService refreshTokenService,
     IJwtTokenGenerator jwtTokenGenerator,
     IPasswordHasher<AppUser> passwordHasher,
     ICurrentUserService currentUserService,
@@ -77,6 +78,10 @@ public class AuthController(
         user.PasswordHash = passwordHasher.HashPassword(user, request.Password);
 
         await context.Users.AddAsync(user, cancellationToken);
+        var issuedTokens = await refreshTokenService.CreateAsync(
+            user,
+            Request.Headers.UserAgent.ToString(),
+            cancellationToken);
         await context.SaveChangesAsync(cancellationToken);
         await auditService.WriteAsync(
             action: "auth.register",
@@ -87,7 +92,10 @@ public class AuthController(
             metadata: new { user.Id, user.PhoneNumber, user.Role },
             cancellationToken: cancellationToken);
 
-        return CreatedAtAction(nameof(Me), new { }, CreateAuthResponse(user));
+        return CreatedAtAction(
+            nameof(Me),
+            new { },
+            CreateAuthResponse(user, issuedTokens.Token, issuedTokens.Entity.ExpiresAtUtc));
     }
 
     [AllowAnonymous]
@@ -120,7 +128,13 @@ public class AuthController(
             return Unauthorized("Invalid credentials.");
         }
 
-        return Ok(CreateAuthResponse(user));
+        var issuedTokens = await refreshTokenService.CreateAsync(
+            user,
+            Request.Headers.UserAgent.ToString(),
+            cancellationToken);
+        await context.SaveChangesAsync(cancellationToken);
+
+        return Ok(CreateAuthResponse(user, issuedTokens.Token, issuedTokens.Entity.ExpiresAtUtc));
     }
 
     [Authorize]
@@ -195,7 +209,104 @@ public class AuthController(
         });
     }
 
-    private AuthResponse CreateAuthResponse(AppUser user)
+    [AllowAnonymous]
+    [HttpPost("refresh")]
+    [ProducesResponseType(typeof(AuthResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    public async Task<ActionResult<AuthResponse>> Refresh(
+        [FromBody] RefreshTokenRequest request,
+        CancellationToken cancellationToken)
+    {
+        var refreshToken = await refreshTokenService.GetByTokenAsync(request.RefreshToken.Trim(), cancellationToken);
+        if (refreshToken?.User is null || !refreshToken.User.IsActive)
+        {
+            return Unauthorized("Invalid refresh token.");
+        }
+
+        if (refreshToken.RevokedAtUtc is not null || refreshToken.ExpiresAtUtc <= DateTime.UtcNow)
+        {
+            return Unauthorized("Refresh token is no longer active.");
+        }
+
+        var replacement = await refreshTokenService.CreateAsync(
+            refreshToken.User,
+            Request.Headers.UserAgent.ToString(),
+            cancellationToken);
+
+        refreshToken.LastUsedAtUtc = DateTime.UtcNow;
+        refreshToken.RevokedAtUtc = DateTime.UtcNow;
+        refreshToken.ReplacedByTokenHash = replacement.Entity.TokenHash;
+        refreshToken.RevocationReason = "rotated";
+
+        await context.SaveChangesAsync(cancellationToken);
+        await auditService.WriteAsync(
+            action: "auth.refresh",
+            entityName: "RefreshToken",
+            entityId: refreshToken.Id.ToString(),
+            userId: refreshToken.UserId,
+            pharmacyId: refreshToken.User.PharmacyId,
+            description: "Refresh token rotated.",
+            metadata: new { refreshToken.Id, refreshToken.UserId },
+            cancellationToken: cancellationToken);
+
+        return Ok(CreateAuthResponse(
+            refreshToken.User,
+            replacement.Token,
+            replacement.Entity.ExpiresAtUtc));
+    }
+
+    [Authorize]
+    [HttpPost("logout")]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    public async Task<IActionResult> Logout(
+        [FromBody] LogoutRequest request,
+        CancellationToken cancellationToken)
+    {
+        var refreshToken = await refreshTokenService.GetByTokenAsync(request.RefreshToken.Trim(), cancellationToken);
+        if (refreshToken is null || refreshToken.UserId != currentUserService.UserId)
+        {
+            return NoContent();
+        }
+
+        await refreshTokenService.RevokeAsync(refreshToken, "logout", cancellationToken);
+        await context.SaveChangesAsync(cancellationToken);
+        await auditService.WriteAsync(
+            action: "auth.logout",
+            entityName: "RefreshToken",
+            entityId: refreshToken.Id.ToString(),
+            userId: refreshToken.UserId,
+            pharmacyId: refreshToken.User?.PharmacyId,
+            description: "Refresh token revoked on logout.",
+            metadata: new { refreshToken.Id, refreshToken.UserId },
+            cancellationToken: cancellationToken);
+
+        return NoContent();
+    }
+
+    [Authorize]
+    [HttpPost("revoke-all")]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    public async Task<IActionResult> RevokeAll(CancellationToken cancellationToken)
+    {
+        if (!currentUserService.UserId.HasValue)
+        {
+            return Unauthorized();
+        }
+
+        await refreshTokenService.RevokeAllForUserAsync(currentUserService.UserId.Value, "revoke-all", cancellationToken);
+        await context.SaveChangesAsync(cancellationToken);
+        await auditService.WriteAsync(
+            action: "auth.revoke_all",
+            entityName: "RefreshToken",
+            entityId: currentUserService.UserId.Value.ToString(),
+            userId: currentUserService.UserId.Value,
+            description: "All active refresh tokens revoked.",
+            cancellationToken: cancellationToken);
+
+        return NoContent();
+    }
+
+    private AuthResponse CreateAuthResponse(AppUser user, string refreshToken, DateTime refreshTokenExpiresAtUtc)
     {
         var expiresAtUtc = DateTime.UtcNow.AddMinutes(_jwtSettings.ExpirationMinutes);
 
@@ -203,6 +314,8 @@ public class AuthController(
         {
             AccessToken = jwtTokenGenerator.GenerateToken(user),
             ExpiresAtUtc = expiresAtUtc,
+            RefreshToken = refreshToken,
+            RefreshTokenExpiresAtUtc = refreshTokenExpiresAtUtc,
             User = new UserProfileResponse
             {
                 Id = user.Id,

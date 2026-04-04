@@ -29,9 +29,11 @@ public static class DependencyInjection
             provider.GetRequiredService<ApplicationDbContext>());
 
         services.Configure<JwtSettings>(configuration.GetSection(JwtSettings.SectionName));
+        services.Configure<RefreshTokenSettings>(configuration.GetSection(RefreshTokenSettings.SectionName));
         services.AddHttpContextAccessor();
         services.AddScoped<ICurrentUserService, CurrentUserService>();
         services.AddScoped<IJwtTokenGenerator, JwtTokenGenerator>();
+        services.AddScoped<IRefreshTokenService, RefreshTokenService>();
         services.AddScoped<IAuditService, AuditService>();
         services.AddScoped<IPasswordHasher<AppUser>, PasswordHasher<AppUser>>();
         services.AddScoped<IReservationStateService, ReservationStateService>();

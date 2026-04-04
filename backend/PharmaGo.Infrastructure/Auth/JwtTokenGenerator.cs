@@ -12,13 +12,13 @@ public class JwtTokenGenerator(IOptions<JwtSettings> options) : IJwtTokenGenerat
 {
     private readonly JwtSettings _settings = options.Value;
 
-    public string GenerateToken(AppUser user)
+    public string GenerateToken(AppUser user, string? jwtId = null)
     {
         var expiresAtUtc = DateTime.UtcNow.AddMinutes(_settings.ExpirationMinutes);
         var claims = new List<Claim>
         {
             new(JwtRegisteredClaimNames.Sub, user.Id.ToString()),
-            new(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString()),
+            new(JwtRegisteredClaimNames.Jti, jwtId ?? Guid.NewGuid().ToString()),
             new(JwtRegisteredClaimNames.UniqueName, user.PhoneNumber),
             new(ClaimTypes.NameIdentifier, user.Id.ToString()),
             new(ClaimTypes.Name, $"{user.FirstName} {user.LastName}".Trim()),

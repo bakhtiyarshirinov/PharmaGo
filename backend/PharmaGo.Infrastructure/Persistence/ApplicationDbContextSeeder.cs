@@ -201,6 +201,7 @@ public static class ApplicationDbContextSeeder
             await context.Medicines.AddRangeAsync([paracetamol, ibuprofen, amoxicillin], cancellationToken);
             await context.StockItems.AddRangeAsync(stockItems, cancellationToken);
             await context.SupplierMedicines.AddRangeAsync(supplierMedicines, cancellationToken);
+            await context.SaveChangesAsync(cancellationToken);
         }
 
         var pharmacies = await context.Pharmacies.OrderBy(x => x.Name).ToListAsync(cancellationToken);

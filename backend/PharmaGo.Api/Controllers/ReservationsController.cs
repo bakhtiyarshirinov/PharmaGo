@@ -1,10 +1,12 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using PharmaGo.Api.Realtime;
 using PharmaGo.Application.Abstractions;
 using PharmaGo.Application.Reservations.Commands.CreateReservation;
 using PharmaGo.Application.Reservations.Commands.UpdateReservationStatus;
 using PharmaGo.Application.Reservations.Queries.GetReservation;
+using PharmaGo.Application.Stocks.Queries.GetLowStockAlerts;
 using PharmaGo.Domain.Models;
 using PharmaGo.Domain.Models.Enums;
 using PharmaGo.Infrastructure.Auth;
@@ -13,7 +15,10 @@ namespace PharmaGo.Api.Controllers;
 
 [ApiController]
 [Route("api/[controller]")]
-public class ReservationsController(IApplicationDbContext context, ICurrentUserService currentUserService) : ControllerBase
+public class ReservationsController(
+    IApplicationDbContext context,
+    ICurrentUserService currentUserService,
+    RealtimeNotificationService realtimeNotificationService) : ControllerBase
 {
     [Authorize]
     [HttpGet("my")]
@@ -167,6 +172,8 @@ public class ReservationsController(IApplicationDbContext context, ICurrentUserS
             TelegramChatId = customer.TelegramChatId
         };
 
+        var affectedStocks = new List<StockItem>();
+
         foreach (var item in request.Items)
         {
             var requestedQuantity = item.Quantity;
@@ -184,6 +191,7 @@ public class ReservationsController(IApplicationDbContext context, ICurrentUserS
                 var quantityToReserve = Math.Min(requestedQuantity, stock.AvailableQuantity);
                 stock.ReservedQuantity += quantityToReserve;
                 requestedQuantity -= quantityToReserve;
+                affectedStocks.Add(stock);
             }
 
             reservation.Items.Add(new ReservationItem
@@ -223,6 +231,9 @@ public class ReservationsController(IApplicationDbContext context, ICurrentUserS
                 TotalPrice = item.TotalPrice
             }).ToList()
         };
+
+        await realtimeNotificationService.NotifyReservationCreatedAsync(reservation.PharmacyId, response, cancellationToken);
+        await PublishLowStockNotificationsAsync(affectedStocks, cancellationToken);
 
         return CreatedAtAction(nameof(GetById), new { id = reservation.Id }, response);
     }
@@ -297,6 +308,8 @@ public class ReservationsController(IApplicationDbContext context, ICurrentUserS
 
         if (request.Status == ReservationStatus.Completed)
         {
+            var completedStocks = new List<StockItem>();
+
             foreach (var item in reservation.Items)
             {
                 var quantityToComplete = item.Quantity;
@@ -318,15 +331,28 @@ public class ReservationsController(IApplicationDbContext context, ICurrentUserS
                     stockItem.ReservedQuantity -= quantity;
                     stockItem.Quantity -= quantity;
                     quantityToComplete -= quantity;
+                    completedStocks.Add(stockItem);
                 }
             }
+
+            await context.SaveChangesAsync(cancellationToken);
+            await PublishLowStockNotificationsAsync(completedStocks, cancellationToken);
         }
 
-        await context.SaveChangesAsync(cancellationToken);
+        if (request.Status != ReservationStatus.Completed)
+        {
+            await context.SaveChangesAsync(cancellationToken);
+        }
 
         var response = await QueryReservations()
             .Where(x => x.ReservationId == reservation.Id)
             .FirstAsync(cancellationToken);
+
+        await realtimeNotificationService.NotifyReservationStatusChangedAsync(
+            reservation.PharmacyId,
+            reservation.CustomerId,
+            response,
+            cancellationToken);
 
         return Ok(response);
     }
@@ -447,5 +473,32 @@ public class ReservationsController(IApplicationDbContext context, ICurrentUserS
     private static string GenerateReservationNumber()
     {
         return $"RES-{DateTime.UtcNow:yyyyMMddHHmmss}-{Random.Shared.Next(1000, 9999)}";
+    }
+
+    private async Task PublishLowStockNotificationsAsync(IEnumerable<StockItem> stockItems, CancellationToken cancellationToken)
+    {
+        foreach (var stockItem in stockItems
+                     .GroupBy(x => x.Id)
+                     .Select(group => group.Last())
+                     .Where(x => x.AvailableQuantity <= x.ReorderLevel))
+        {
+            await realtimeNotificationService.NotifyLowStockAsync(stockItem.PharmacyId, new LowStockAlertResponse
+            {
+                StockItemId = stockItem.Id,
+                PharmacyId = stockItem.PharmacyId,
+                PharmacyName = stockItem.Pharmacy?.Name ?? string.Empty,
+                MedicineId = stockItem.MedicineId,
+                MedicineName = stockItem.Medicine?.BrandName ?? string.Empty,
+                GenericName = stockItem.Medicine?.GenericName ?? string.Empty,
+                BatchNumber = stockItem.BatchNumber,
+                ExpirationDate = stockItem.ExpirationDate,
+                Quantity = stockItem.Quantity,
+                ReservedQuantity = stockItem.ReservedQuantity,
+                AvailableQuantity = stockItem.AvailableQuantity,
+                ReorderLevel = stockItem.ReorderLevel,
+                Deficit = stockItem.ReorderLevel - stockItem.AvailableQuantity,
+                RetailPrice = stockItem.RetailPrice
+            }, cancellationToken);
+        }
     }
 }

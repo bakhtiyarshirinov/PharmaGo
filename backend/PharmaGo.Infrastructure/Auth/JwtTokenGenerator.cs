@@ -31,6 +31,11 @@ public class JwtTokenGenerator(IOptions<JwtSettings> options) : IJwtTokenGenerat
             claims.Add(new Claim(ClaimTypes.Email, user.Email));
         }
 
+        if (user.PharmacyId.HasValue)
+        {
+            claims.Add(new Claim("pharmacy_id", user.PharmacyId.Value.ToString()));
+        }
+
         var signingCredentials = new SigningCredentials(
             new SymmetricSecurityKey(Encoding.UTF8.GetBytes(_settings.SecretKey)),
             SecurityAlgorithms.HmacSha256);

@@ -138,6 +138,9 @@ Endpoints:
 - `GET /api/stocks/alerts/low-stock`
   - pharmacist or moderator
   - returns low-stock items in permitted pharmacy scope
+- `GET /api/stocks/alerts/restock-suggestions`
+  - pharmacist or moderator
+  - returns supplier-backed restock suggestions for low-stock items
 - `GET /api/stocks/pharmacy/{pharmacyId}`
   - pharmacist or moderator
   - returns stock items for a pharmacy
@@ -154,6 +157,8 @@ Important details:
 - moderators can work across all pharmacies
 - prevents duplicate `(pharmacy, medicine, batch)` records
 - prevents reducing quantity below already reserved amount
+- picks the cheapest available supplier option per medicine
+- respects supplier minimum order quantity and supplier availability
 - emits `stock.low` and `stock.restored` SignalR events
 - writes audit records for create and update
 - dashboard and medicine-search caches are invalidated on stock writes

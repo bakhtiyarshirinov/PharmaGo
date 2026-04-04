@@ -7,6 +7,7 @@ using PharmaGo.Application.Auth.Contracts;
 using PharmaGo.Application.Reservations.Commands.CreateReservation;
 using PharmaGo.Application.Reservations.Commands.UpdateReservationStatus;
 using PharmaGo.Application.Reservations.Queries.GetReservation;
+using PharmaGo.Application.Stocks.Queries.GetRestockSuggestions;
 using PharmaGo.Domain.Models.Enums;
 using PharmaGo.IntegrationTests.Infrastructure;
 using PharmaGo.Infrastructure.Persistence;
@@ -138,5 +139,48 @@ public class ReservationFlowTests(CustomWebApplicationFactory factory) : IClassF
         Assert.Equal(initialQuantity - 1, updatedStock.Quantity);
         Assert.Equal(0, updatedStock.ReservedQuantity);
         Assert.Equal(ReservationStatus.Completed, updatedReservation.Status);
+    }
+
+    [Fact]
+    public async Task Pharmacist_ShouldGetRestockSuggestions_ForOwnPharmacy()
+    {
+        using (var scope = factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+            var stockItem = await db.StockItems
+                .Include(x => x.Pharmacy)
+                .Include(x => x.Medicine)
+                .FirstAsync(x => x.Pharmacy!.Name == "PharmaGo Central" && x.Medicine!.BrandName == "Panadol");
+
+            stockItem.Quantity = 12;
+            stockItem.ReservedQuantity = 0;
+            stockItem.ReorderLevel = 20;
+            await db.SaveChangesAsync();
+        }
+
+        var pharmacistLogin = await _client.PostAsJsonAsync("/api/auth/login", new LoginRequest
+        {
+            PhoneNumber = "+994500000001",
+            Password = "Pharmacist123!"
+        });
+
+        var pharmacistAuth = await pharmacistLogin.Content.ReadAsAsync<AuthResponse>();
+        Assert.NotNull(pharmacistAuth);
+
+        _client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", pharmacistAuth!.AccessToken);
+
+        var response = await _client.GetAsync("/api/stocks/alerts/restock-suggestions");
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        var payload = await response.Content.ReadAsAsync<IReadOnlyCollection<RestockSuggestionResponse>>();
+        Assert.NotNull(payload);
+
+        var suggestion = Assert.Single(payload!);
+        Assert.Equal("PharmaGo Central", suggestion.PharmacyName);
+        Assert.Equal("Panadol", suggestion.MedicineName);
+        Assert.Equal(8, suggestion.Deficit);
+        Assert.Equal(50, suggestion.SuggestedOrderQuantity);
+        Assert.Equal("PharmaGo Main Depot", suggestion.DepotName);
+        Assert.Equal(50m, suggestion.EstimatedWholesaleCost);
     }
 }

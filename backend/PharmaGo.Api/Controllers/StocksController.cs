@@ -6,6 +6,7 @@ using PharmaGo.Application.Abstractions;
 using PharmaGo.Application.Stocks.Commands.CreateStockItem;
 using PharmaGo.Application.Stocks.Commands.UpdateStockItem;
 using PharmaGo.Application.Stocks.Queries.GetLowStockAlerts;
+using PharmaGo.Application.Stocks.Queries.GetRestockSuggestions;
 using PharmaGo.Application.Stocks.Queries.GetStocks;
 using PharmaGo.Domain.Models;
 using PharmaGo.Infrastructure.Caching;
@@ -77,6 +78,127 @@ public class StocksController(
             .ToListAsync(cancellationToken);
 
         return Ok(lowStockItems);
+    }
+
+    [HttpGet("alerts/restock-suggestions")]
+    [ProducesResponseType(typeof(IReadOnlyCollection<RestockSuggestionResponse>), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    public async Task<ActionResult<IReadOnlyCollection<RestockSuggestionResponse>>> GetRestockSuggestions(
+        [FromQuery] Guid? pharmacyId,
+        CancellationToken cancellationToken)
+    {
+        if (pharmacyId.HasValue)
+        {
+            var accessResult = await EnsurePharmacyAccessAsync(pharmacyId.Value, cancellationToken);
+            if (accessResult is not null)
+            {
+                return accessResult;
+            }
+        }
+
+        var effectivePharmacyId = pharmacyId;
+
+        if (!effectivePharmacyId.HasValue && User.IsInRole(RoleNames.Pharmacist) && !User.IsInRole(RoleNames.Moderator))
+        {
+            var currentUser = await context.Users
+                .AsNoTracking()
+                .FirstOrDefaultAsync(x => x.Id == currentUserService.UserId, cancellationToken);
+
+            effectivePharmacyId = currentUser?.PharmacyId;
+        }
+
+        var lowStockItems = await context.StockItems
+            .AsNoTracking()
+            .Where(x => x.IsActive &&
+                (!effectivePharmacyId.HasValue || x.PharmacyId == effectivePharmacyId.Value) &&
+                (x.Quantity - x.ReservedQuantity) <= x.ReorderLevel)
+            .Select(x => new
+            {
+                x.Id,
+                x.PharmacyId,
+                PharmacyName = x.Pharmacy!.Name,
+                x.MedicineId,
+                MedicineName = x.Medicine!.BrandName,
+                x.Medicine.GenericName,
+                AvailableQuantity = x.Quantity - x.ReservedQuantity,
+                x.ReorderLevel
+            })
+            .ToListAsync(cancellationToken);
+
+        if (lowStockItems.Count == 0)
+        {
+            return Ok(Array.Empty<RestockSuggestionResponse>());
+        }
+
+        var medicineIds = lowStockItems
+            .Select(x => x.MedicineId)
+            .Distinct()
+            .ToList();
+
+        var suppliers = await context.SupplierMedicines
+            .AsNoTracking()
+            .Where(x => x.IsAvailable &&
+                x.AvailableQuantity > 0 &&
+                medicineIds.Contains(x.MedicineId))
+            .Select(x => new
+            {
+                x.MedicineId,
+                x.DepotId,
+                DepotName = x.Depot!.Name,
+                x.AvailableQuantity,
+                x.MinimumOrderQuantity,
+                x.EstimatedDeliveryHours,
+                x.WholesalePrice
+            })
+            .ToListAsync(cancellationToken);
+
+        var preferredSuppliers = suppliers
+            .GroupBy(x => x.MedicineId)
+            .ToDictionary(
+                x => x.Key,
+                x => x
+                    .OrderBy(supplier => supplier.WholesalePrice)
+                    .ThenBy(supplier => supplier.EstimatedDeliveryHours)
+                    .ThenByDescending(supplier => supplier.AvailableQuantity)
+                    .First());
+
+        var suggestions = lowStockItems
+            .Where(x => preferredSuppliers.ContainsKey(x.MedicineId))
+            .Select(x =>
+            {
+                var supplier = preferredSuppliers[x.MedicineId];
+                var deficit = Math.Max(0, x.ReorderLevel - x.AvailableQuantity);
+                var requestedQuantity = Math.Max(deficit, supplier.MinimumOrderQuantity);
+                var suggestedQuantity = Math.Min(requestedQuantity, supplier.AvailableQuantity);
+
+                return new RestockSuggestionResponse
+                {
+                    StockItemId = x.Id,
+                    PharmacyId = x.PharmacyId,
+                    PharmacyName = x.PharmacyName,
+                    MedicineId = x.MedicineId,
+                    MedicineName = x.MedicineName,
+                    GenericName = x.GenericName,
+                    AvailableQuantity = x.AvailableQuantity,
+                    ReorderLevel = x.ReorderLevel,
+                    Deficit = deficit,
+                    SuggestedOrderQuantity = suggestedQuantity,
+                    DepotId = supplier.DepotId,
+                    DepotName = supplier.DepotName,
+                    SupplierAvailableQuantity = supplier.AvailableQuantity,
+                    MinimumOrderQuantity = supplier.MinimumOrderQuantity,
+                    EstimatedDeliveryHours = supplier.EstimatedDeliveryHours,
+                    WholesalePrice = supplier.WholesalePrice,
+                    EstimatedWholesaleCost = supplier.WholesalePrice * suggestedQuantity
+                };
+            })
+            .Where(x => x.SuggestedOrderQuantity > 0)
+            .OrderByDescending(x => x.Deficit)
+            .ThenBy(x => x.PharmacyName)
+            .ThenBy(x => x.MedicineName)
+            .ToList();
+
+        return Ok(suggestions);
     }
 
     [HttpGet("pharmacy/{pharmacyId:guid}")]

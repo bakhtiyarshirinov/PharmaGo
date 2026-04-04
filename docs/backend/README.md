@@ -13,7 +13,7 @@ The backend solves four main business flows:
 1. user registration and JWT authentication
 2. medicine search with live availability by pharmacy
 3. reservation creation and lifecycle management
-4. pharmacy stock monitoring with low-stock alerts and realtime notifications
+4. pharmacy stock monitoring with low-stock alerts, supplier restock suggestions and realtime notifications
 
 ## Runtime Features
 - JWT bearer authentication
@@ -40,7 +40,7 @@ The backend solves four main business flows:
 - `UsersController`: moderator user management, pharmacist creation, soft delete and restore
 - `MedicinesController`: medicine catalog search with stock availability
 - `ReservationsController`: create reservation, read own reservations, pharmacy reservation workflow
-- `StocksController`: pharmacy stock CRUD and low-stock alerts
+- `StocksController`: pharmacy stock CRUD, low-stock alerts and supplier restock suggestions
 - `DashboardController`: summary metrics and recent reservations for staff dashboards
 - `AuditLogsController`: staff audit trail access
 

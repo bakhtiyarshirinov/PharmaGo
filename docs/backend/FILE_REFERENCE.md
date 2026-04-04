@@ -18,6 +18,7 @@ This file documents the purpose of every backend source file currently in the re
 ### Controllers
 - `backend/PharmaGo.Api/Controllers/AuthController.cs`: authentication and role management endpoints.
 - `backend/PharmaGo.Api/Controllers/MedicinesController.cs`: public medicine search endpoints with availability projection.
+- `backend/PharmaGo.Api/Controllers/UsersController.cs`: moderator-only user management endpoints with soft delete and restore.
 - `backend/PharmaGo.Api/Controllers/ReservationsController.cs`: reservation create, read and workflow transition endpoints.
 - `backend/PharmaGo.Api/Controllers/StocksController.cs`: inventory management and low-stock alert endpoints for staff.
 - `backend/PharmaGo.Api/Controllers/DashboardController.cs`: dashboard summary and recent reservation endpoints for staff UI.
@@ -77,6 +78,11 @@ This file documents the purpose of every backend source file currently in the re
 
 ### Audit
 - `backend/PharmaGo.Application/Audit/Queries/GetAuditLogs/AuditLogResponse.cs`: audit trail DTO returned from `AuditLogsController`.
+
+### Users
+- `backend/PharmaGo.Application/Users/Contracts/CreateManagedUserRequest.cs`: moderator payload for creating a user or pharmacist account.
+- `backend/PharmaGo.Application/Users/Contracts/UpdateManagedUserRequest.cs`: moderator payload for editing account data, role and optional password.
+- `backend/PharmaGo.Application/Users/Contracts/UserManagementResponse.cs`: moderator-facing user DTO with active state and pharmacy display info.
 
 ## PharmaGo.Domain
 
@@ -163,3 +169,4 @@ This file documents the purpose of every backend source file currently in the re
 ### Test Suites
 - `backend/PharmaGo.IntegrationTests/Auth/AuthFlowTests.cs`: covers register, refresh rotation, logout and revoke-all flows.
 - `backend/PharmaGo.IntegrationTests/Reservations/ReservationFlowTests.cs`: covers authenticated reservation creation and pharmacist completion workflow.
+- `backend/PharmaGo.IntegrationTests/Users/UserManagementTests.cs`: covers moderator account creation, soft delete and restore scenarios.

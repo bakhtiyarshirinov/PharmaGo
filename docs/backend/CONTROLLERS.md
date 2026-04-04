@@ -55,6 +55,41 @@ Important details:
 - uses PostgreSQL `ILIKE`
 - returns only medicines that currently have positive availability
 
+## UsersController
+File: `backend/PharmaGo.Api/Controllers/UsersController.cs`
+
+Purpose:
+- gives moderators a dedicated account-management API for pharmacists and regular users
+
+Endpoints:
+- `GET /api/users`
+  - moderator only
+  - supports filtering by `role`, `isActive`, `pharmacyId` and `search`
+- `GET /api/users/{id}`
+  - moderator only
+  - returns a single user profile with pharmacy info
+- `POST /api/users`
+  - moderator only
+  - creates `User` or `Pharmacist` accounts
+  - rejects moderator creation through this endpoint
+- `PUT /api/users/{id}`
+  - moderator only
+  - updates profile, role, pharmacy assignment and optional password
+- `DELETE /api/users/{id}`
+  - moderator only
+  - soft deletes account through `IsActive = false`
+- `POST /api/users/{id}/restore`
+  - moderator only
+  - restores a soft-deleted account
+
+Important details:
+- pharmacist accounts require a valid `PharmacyId`
+- regular users cannot be assigned to a pharmacy
+- moderator cannot deactivate the currently authenticated moderator account
+- password changes revoke all existing refresh tokens for that user
+- soft delete also revokes all active refresh tokens
+- all moderator actions are written to the audit log
+
 ## ReservationsController
 File: `backend/PharmaGo.Api/Controllers/ReservationsController.cs`
 

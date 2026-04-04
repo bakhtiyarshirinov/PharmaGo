@@ -3,35 +3,46 @@ using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using PharmaGo.Application.Abstractions;
+using PharmaGo.Application.Common.Contracts;
 using PharmaGo.Application.Users.Contracts;
 using PharmaGo.Domain.Models;
 using PharmaGo.Domain.Models.Enums;
+using PharmaGo.Infrastructure.Caching;
 using PharmaGo.Infrastructure.Auth;
 
 namespace PharmaGo.Api.Controllers;
 
 [ApiController]
 [Route("api/[controller]")]
-[Authorize(Policy = RoleNames.ModeratorPolicy)]
+[Authorize(Policy = PolicyNames.ManageUsers)]
 public class UsersController(
     IApplicationDbContext context,
+    IAppCacheService cacheService,
     IAuditService auditService,
     ICurrentUserService currentUserService,
     IPasswordHasher<AppUser> passwordHasher,
     IRefreshTokenService refreshTokenService) : ControllerBase
 {
     [HttpGet]
-    [ProducesResponseType(typeof(IReadOnlyCollection<UserManagementResponse>), StatusCodes.Status200OK)]
-    public async Task<ActionResult<IReadOnlyCollection<UserManagementResponse>>> Get(
+    [ProducesResponseType(typeof(PagedResponse<UserManagementResponse>), StatusCodes.Status200OK)]
+    public async Task<ActionResult<PagedResponse<UserManagementResponse>>> Get(
         [FromQuery] UserRole? role,
         [FromQuery] bool? isActive,
         [FromQuery] Guid? pharmacyId,
         [FromQuery] string? search,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        [FromQuery] int page = 1,
+        [FromQuery] int pageSize = 20,
+        [FromQuery] string sortBy = "createdAt",
+        [FromQuery] string sortDirection = "desc")
     {
-        var normalizedSearch = search?.Trim();
+        page = Math.Max(page, 1);
+        pageSize = Math.Clamp(pageSize, 1, 100);
 
-        var users = await context.Users
+        var normalizedSearch = search?.Trim();
+        var normalizedSortBy = NormalizeSortBy(sortBy);
+        var normalizedSortDirection = NormalizeSortDirection(sortDirection);
+        var usersQuery = context.Users
             .AsNoTracking()
             .Where(x =>
                 (!role.HasValue || x.Role == role.Value) &&
@@ -41,10 +52,22 @@ public class UsersController(
                  EF.Functions.ILike(x.FirstName, $"%{normalizedSearch}%") ||
                  EF.Functions.ILike(x.LastName, $"%{normalizedSearch}%") ||
                  EF.Functions.ILike(x.PhoneNumber, $"%{normalizedSearch}%") ||
-                 (x.Email != null && EF.Functions.ILike(x.Email, $"%{normalizedSearch}%"))))
-            .OrderBy(x => x.FirstName)
-            .ThenBy(x => x.LastName)
-            .Take(100)
+                 (x.Email != null && EF.Functions.ILike(x.Email, $"%{normalizedSearch}%"))));
+
+        var scopeVersion = await cacheService.GetScopeVersionAsync(CacheScopes.Users, cancellationToken);
+        var cacheKey = $"users:list:v{scopeVersion}:role={role?.ToString() ?? "all"}:active={isActive?.ToString() ?? "all"}:pharmacy={pharmacyId?.ToString() ?? "all"}:search={normalizedSearch ?? "none"}:page={page}:size={pageSize}:sort={normalizedSortBy}:{normalizedSortDirection}";
+        var cached = await cacheService.GetAsync<PagedResponse<UserManagementResponse>>(cacheKey, cancellationToken);
+        if (cached is not null)
+        {
+            return Ok(cached);
+        }
+
+        var totalCount = await usersQuery.CountAsync(cancellationToken);
+        var orderedUsers = ApplySorting(usersQuery, normalizedSortBy, normalizedSortDirection);
+
+        var users = await orderedUsers
+            .Skip((page - 1) * pageSize)
+            .Take(pageSize)
             .Select(x => new UserManagementResponse
             {
                 Id = x.Id,
@@ -63,7 +86,20 @@ public class UsersController(
             })
             .ToListAsync(cancellationToken);
 
-        return Ok(users);
+        var response = new PagedResponse<UserManagementResponse>
+        {
+            Items = users,
+            Page = page,
+            PageSize = pageSize,
+            TotalCount = totalCount,
+            TotalPages = (int)Math.Ceiling(totalCount / (double)pageSize),
+            SortBy = normalizedSortBy,
+            SortDirection = normalizedSortDirection
+        };
+
+        await cacheService.SetAsync(cacheKey, response, TimeSpan.FromMinutes(2), cancellationToken);
+
+        return Ok(response);
     }
 
     [HttpGet("{id:guid}")]
@@ -122,6 +158,8 @@ public class UsersController(
 
         await context.Users.AddAsync(user, cancellationToken);
         await context.SaveChangesAsync(cancellationToken);
+        await cacheService.BumpScopeVersionAsync(CacheScopes.Users, cancellationToken);
+        await cacheService.BumpScopeVersionAsync(CacheScopes.Dashboard, cancellationToken);
         await auditService.WriteAsync(
             action: "user.created",
             entityName: "AppUser",
@@ -189,6 +227,8 @@ public class UsersController(
         }
 
         await context.SaveChangesAsync(cancellationToken);
+        await cacheService.BumpScopeVersionAsync(CacheScopes.Users, cancellationToken);
+        await cacheService.BumpScopeVersionAsync(CacheScopes.Dashboard, cancellationToken);
         await auditService.WriteAsync(
             action: "user.updated",
             entityName: "AppUser",
@@ -230,6 +270,8 @@ public class UsersController(
         user.IsActive = false;
         await refreshTokenService.RevokeAllForUserAsync(user.Id, "soft-delete", cancellationToken);
         await context.SaveChangesAsync(cancellationToken);
+        await cacheService.BumpScopeVersionAsync(CacheScopes.Users, cancellationToken);
+        await cacheService.BumpScopeVersionAsync(CacheScopes.Dashboard, cancellationToken);
         await auditService.WriteAsync(
             action: "user.deactivated",
             entityName: "AppUser",
@@ -256,6 +298,8 @@ public class UsersController(
 
         user.IsActive = true;
         await context.SaveChangesAsync(cancellationToken);
+        await cacheService.BumpScopeVersionAsync(CacheScopes.Users, cancellationToken);
+        await cacheService.BumpScopeVersionAsync(CacheScopes.Dashboard, cancellationToken);
         await auditService.WriteAsync(
             action: "user.restored",
             entityName: "AppUser",
@@ -334,5 +378,46 @@ public class UsersController(
     private static string? NormalizeOptional(string? value)
     {
         return string.IsNullOrWhiteSpace(value) ? null : value.Trim();
+    }
+
+    private static string NormalizeSortBy(string? sortBy)
+    {
+        return sortBy?.Trim().ToLowerInvariant() switch
+        {
+            "firstname" => "firstName",
+            "lastname" => "lastName",
+            "phone" => "phoneNumber",
+            "pharmacy" => "pharmacyName",
+            _ => "createdAt"
+        };
+    }
+
+    private static string NormalizeSortDirection(string? sortDirection)
+    {
+        return string.Equals(sortDirection?.Trim(), "asc", StringComparison.OrdinalIgnoreCase)
+            ? "asc"
+            : "desc";
+    }
+
+    private static IQueryable<AppUser> ApplySorting(
+        IQueryable<AppUser> query,
+        string sortBy,
+        string sortDirection)
+    {
+        var ascending = sortDirection == "asc";
+
+        return (sortBy, ascending) switch
+        {
+            ("firstName", true) => query.OrderBy(x => x.FirstName).ThenBy(x => x.LastName),
+            ("firstName", false) => query.OrderByDescending(x => x.FirstName).ThenByDescending(x => x.LastName),
+            ("lastName", true) => query.OrderBy(x => x.LastName).ThenBy(x => x.FirstName),
+            ("lastName", false) => query.OrderByDescending(x => x.LastName).ThenByDescending(x => x.FirstName),
+            ("phoneNumber", true) => query.OrderBy(x => x.PhoneNumber),
+            ("phoneNumber", false) => query.OrderByDescending(x => x.PhoneNumber),
+            ("pharmacyName", true) => query.OrderBy(x => x.Pharmacy!.Name).ThenBy(x => x.LastName),
+            ("pharmacyName", false) => query.OrderByDescending(x => x.Pharmacy!.Name).ThenByDescending(x => x.LastName),
+            ("createdAt", true) => query.OrderBy(x => x.CreatedAtUtc),
+            _ => query.OrderByDescending(x => x.CreatedAtUtc)
+        };
     }
 }

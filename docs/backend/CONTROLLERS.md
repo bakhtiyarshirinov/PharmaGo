@@ -37,6 +37,7 @@ Important details:
 - embeds `pharmacy_id` into JWT when user belongs to a pharmacy
 - stores only hashed refresh tokens in the database
 - uses refresh token rotation on every successful refresh request
+- moderator role assignment is blocked in the legacy role-only endpoint to keep user management consistent
 
 ## MedicinesController
 File: `backend/PharmaGo.Api/Controllers/MedicinesController.cs`
@@ -54,6 +55,7 @@ Endpoint:
 Important details:
 - uses PostgreSQL `ILIKE`
 - returns only medicines that currently have positive availability
+- search responses are cached and invalidated when stock or reservation state changes
 
 ## UsersController
 File: `backend/PharmaGo.Api/Controllers/UsersController.cs`
@@ -65,6 +67,7 @@ Endpoints:
 - `GET /api/users`
   - moderator only
   - supports filtering by `role`, `isActive`, `pharmacyId` and `search`
+  - supports `page`, `pageSize`, `sortBy` and `sortDirection`
 - `GET /api/users/{id}`
   - moderator only
   - returns a single user profile with pharmacy info
@@ -89,6 +92,7 @@ Important details:
 - password changes revoke all existing refresh tokens for that user
 - soft delete also revokes all active refresh tokens
 - all moderator actions are written to the audit log
+- list endpoint returns page metadata and sorting information
 
 ## ReservationsController
 File: `backend/PharmaGo.Api/Controllers/ReservationsController.cs`
@@ -122,6 +126,7 @@ Important details:
 - publishes low-stock notifications when reservations reduce availability
 - writes audit records for create and status transitions
 - delegates stock release and completion rules to `IReservationStateService`
+- dashboard and medicine-search caches are invalidated on reservation writes
 
 ## StocksController
 File: `backend/PharmaGo.Api/Controllers/StocksController.cs`
@@ -151,6 +156,7 @@ Important details:
 - prevents reducing quantity below already reserved amount
 - emits `stock.low` and `stock.restored` SignalR events
 - writes audit records for create and update
+- dashboard and medicine-search caches are invalidated on stock writes
 
 ## DashboardController
 File: `backend/PharmaGo.Api/Controllers/DashboardController.cs`
@@ -169,6 +175,7 @@ Endpoints:
 Important details:
 - pharmacists are automatically scoped to their own pharmacy
 - moderators can request global view or a specific pharmacy
+- summary and recent reservation endpoints are cached
 
 ## AuditLogsController
 File: `backend/PharmaGo.Api/Controllers/AuditLogsController.cs`

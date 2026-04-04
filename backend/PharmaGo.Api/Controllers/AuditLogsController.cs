@@ -9,7 +9,7 @@ namespace PharmaGo.Api.Controllers;
 
 [ApiController]
 [Route("api/[controller]")]
-[Authorize(Policy = RoleNames.StaffPolicy)]
+[Authorize(Policy = PolicyNames.ReadAuditLogs)]
 public class AuditLogsController(IApplicationDbContext context, ICurrentUserService currentUserService) : ControllerBase
 {
     [HttpGet]

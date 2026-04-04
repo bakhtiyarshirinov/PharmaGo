@@ -9,6 +9,7 @@ using PharmaGo.Application.Reservations.Queries.GetReservation;
 using PharmaGo.Application.Stocks.Queries.GetLowStockAlerts;
 using PharmaGo.Domain.Models;
 using PharmaGo.Domain.Models.Enums;
+using PharmaGo.Infrastructure.Caching;
 using PharmaGo.Infrastructure.Auth;
 
 namespace PharmaGo.Api.Controllers;
@@ -17,12 +18,13 @@ namespace PharmaGo.Api.Controllers;
 [Route("api/[controller]")]
 public class ReservationsController(
     IApplicationDbContext context,
+    IAppCacheService cacheService,
     IAuditService auditService,
     ICurrentUserService currentUserService,
     IReservationStateService reservationStateService,
     RealtimeNotificationService realtimeNotificationService) : ControllerBase
 {
-    [Authorize]
+    [Authorize(Policy = PolicyNames.ReadOwnReservations)]
     [HttpGet("my")]
     [ProducesResponseType(typeof(IReadOnlyCollection<ReservationResponse>), StatusCodes.Status200OK)]
     public async Task<ActionResult<IReadOnlyCollection<ReservationResponse>>> GetMyReservations(CancellationToken cancellationToken)
@@ -40,7 +42,7 @@ public class ReservationsController(
         return Ok(reservations);
     }
 
-    [Authorize(Policy = RoleNames.StaffPolicy)]
+    [Authorize(Policy = PolicyNames.ManageOrders)]
     [HttpGet("pharmacy/{pharmacyId:guid}")]
     [ProducesResponseType(typeof(IReadOnlyCollection<ReservationResponse>), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status403Forbidden)]
@@ -87,7 +89,7 @@ public class ReservationsController(
         return Ok(reservation);
     }
 
-    [Authorize]
+    [Authorize(Policy = PolicyNames.CreateReservations)]
     [HttpPost]
     [ProducesResponseType(typeof(ReservationResponse), StatusCodes.Status201Created)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
@@ -209,6 +211,8 @@ public class ReservationsController(
 
         await context.Reservations.AddAsync(reservation, cancellationToken);
         await context.SaveChangesAsync(cancellationToken);
+        await cacheService.BumpScopeVersionAsync(CacheScopes.MedicinesSearch, cancellationToken);
+        await cacheService.BumpScopeVersionAsync(CacheScopes.Dashboard, cancellationToken);
         await auditService.WriteAsync(
             action: "reservation.created",
             entityName: "Reservation",
@@ -343,6 +347,9 @@ public class ReservationsController(
         {
             await context.SaveChangesAsync(cancellationToken);
         }
+
+        await cacheService.BumpScopeVersionAsync(CacheScopes.MedicinesSearch, cancellationToken);
+        await cacheService.BumpScopeVersionAsync(CacheScopes.Dashboard, cancellationToken);
 
         var response = await QueryReservations()
             .Where(x => x.ReservationId == reservation.Id)

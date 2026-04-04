@@ -40,6 +40,7 @@ This file documents the purpose of every backend source file currently in the re
 
 ### Abstractions
 - `backend/PharmaGo.Application/Abstractions/IApplicationDbContext.cs`: persistence contract exposed to API without depending on EF infrastructure implementation details.
+- `backend/PharmaGo.Application/Abstractions/IAppCacheService.cs`: abstraction for distributed cache reads, writes and scope versioning.
 - `backend/PharmaGo.Application/Abstractions/IAuditService.cs`: contract for writing audit trail records.
 - `backend/PharmaGo.Application/Abstractions/ICurrentUserService.cs`: contract for reading current authenticated user identity from request context.
 - `backend/PharmaGo.Application/Abstractions/IJwtTokenGenerator.cs`: contract for JWT access token generation.
@@ -54,6 +55,9 @@ This file documents the purpose of every backend source file currently in the re
 - `backend/PharmaGo.Application/Auth/Contracts/RefreshTokenRequest.cs`: refresh payload carrying the current refresh token.
 - `backend/PharmaGo.Application/Auth/Contracts/UpdateUserRoleRequest.cs`: moderator request model for changing a user role.
 - `backend/PharmaGo.Application/Auth/Contracts/UserProfileResponse.cs`: normalized user profile DTO returned by auth endpoints.
+
+### Common
+- `backend/PharmaGo.Application/Common/Contracts/PagedResponse.cs`: generic paged response wrapper with totals, pages and sorting metadata.
 
 ### Medicines
 - `backend/PharmaGo.Application/Medicines/Queries/SearchMedicines/MedicineAvailabilityDto.cs`: pharmacy-level availability row for search results.
@@ -118,8 +122,16 @@ This file documents the purpose of every backend source file currently in the re
 - `backend/PharmaGo.Infrastructure/Auth/CurrentUserService.cs`: reads JWT claims from `HttpContext` and exposes current user information.
 - `backend/PharmaGo.Infrastructure/Auth/JwtSettings.cs`: configuration model for issuer, audience, secret and access token lifetime.
 - `backend/PharmaGo.Infrastructure/Auth/JwtTokenGenerator.cs`: creates signed JWT access tokens with role and pharmacy claims.
+- `backend/PharmaGo.Infrastructure/Auth/PermissionNames.cs`: central permission list used by authorization policies.
+- `backend/PharmaGo.Infrastructure/Auth/PolicyNames.cs`: shared policy-name constants used by controllers.
 - `backend/PharmaGo.Infrastructure/Auth/RefreshTokenSettings.cs`: configuration model for refresh token lifetime.
+- `backend/PharmaGo.Infrastructure/Auth/RolePermissionProvider.cs`: maps user roles to permission claims embedded into JWTs.
 - `backend/PharmaGo.Infrastructure/Auth/RoleNames.cs`: shared role and policy names used by controllers and auth setup.
+
+### Caching
+- `backend/PharmaGo.Infrastructure/Caching/CacheScopes.cs`: named cache scopes used for version-based invalidation.
+- `backend/PharmaGo.Infrastructure/Caching/DistributedAppCacheService.cs`: distributed cache adapter with JSON serialization and scope-version support.
+- `backend/PharmaGo.Infrastructure/Caching/RedisSettings.cs`: configuration model for Redis connection and instance naming.
 
 ### Persistence
 - `backend/PharmaGo.Infrastructure/Persistence/ApplicationDbContext.cs`: EF Core DbContext implementing `IApplicationDbContext` and timestamp handling.
@@ -170,3 +182,9 @@ This file documents the purpose of every backend source file currently in the re
 - `backend/PharmaGo.IntegrationTests/Auth/AuthFlowTests.cs`: covers register, refresh rotation, logout and revoke-all flows.
 - `backend/PharmaGo.IntegrationTests/Reservations/ReservationFlowTests.cs`: covers authenticated reservation creation and pharmacist completion workflow.
 - `backend/PharmaGo.IntegrationTests/Users/UserManagementTests.cs`: covers moderator account creation, soft delete and restore scenarios.
+
+## Runtime Tooling
+- `backend/PharmaGo.Api/Dockerfile`: multistage .NET 9 container build for the API.
+- `docker-compose.yml`: local orchestration for API, PostgreSQL and Redis.
+- `.env.example`: sample environment variables for local Docker Compose runs.
+- `.dockerignore`: excludes build artifacts and unnecessary files from Docker build context.

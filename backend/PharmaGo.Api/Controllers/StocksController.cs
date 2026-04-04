@@ -8,15 +8,17 @@ using PharmaGo.Application.Stocks.Commands.UpdateStockItem;
 using PharmaGo.Application.Stocks.Queries.GetLowStockAlerts;
 using PharmaGo.Application.Stocks.Queries.GetStocks;
 using PharmaGo.Domain.Models;
+using PharmaGo.Infrastructure.Caching;
 using PharmaGo.Infrastructure.Auth;
 
 namespace PharmaGo.Api.Controllers;
 
 [ApiController]
 [Route("api/[controller]")]
-[Authorize(Policy = RoleNames.StaffPolicy)]
+[Authorize(Policy = PolicyNames.ManageInventory)]
 public class StocksController(
     IApplicationDbContext context,
+    IAppCacheService cacheService,
     IAuditService auditService,
     ICurrentUserService currentUserService,
     RealtimeNotificationService realtimeNotificationService) : ControllerBase
@@ -190,6 +192,8 @@ public class StocksController(
 
         await context.StockItems.AddAsync(stockItem, cancellationToken);
         await context.SaveChangesAsync(cancellationToken);
+        await cacheService.BumpScopeVersionAsync(CacheScopes.MedicinesSearch, cancellationToken);
+        await cacheService.BumpScopeVersionAsync(CacheScopes.Dashboard, cancellationToken);
 
         var response = new StockItemResponse
         {
@@ -287,6 +291,8 @@ public class StocksController(
         stockItem.IsActive = request.IsActive;
 
         await context.SaveChangesAsync(cancellationToken);
+        await cacheService.BumpScopeVersionAsync(CacheScopes.MedicinesSearch, cancellationToken);
+        await cacheService.BumpScopeVersionAsync(CacheScopes.Dashboard, cancellationToken);
 
         var response = new StockItemResponse
         {

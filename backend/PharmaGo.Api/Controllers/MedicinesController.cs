@@ -2,12 +2,15 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using PharmaGo.Application.Abstractions;
 using PharmaGo.Application.Medicines.Queries.SearchMedicines;
+using PharmaGo.Infrastructure.Caching;
 
 namespace PharmaGo.Api.Controllers;
 
 [ApiController]
 [Route("api/[controller]")]
-public class MedicinesController(IApplicationDbContext context) : ControllerBase
+public class MedicinesController(
+    IApplicationDbContext context,
+    IAppCacheService cacheService) : ControllerBase
 {
     [HttpGet("search")]
     [ProducesResponseType(typeof(IReadOnlyCollection<MedicineSearchResponse>), StatusCodes.Status200OK)]
@@ -23,6 +26,13 @@ public class MedicinesController(IApplicationDbContext context) : ControllerBase
 
         var normalizedQuery = query.Trim().ToLower();
         var today = DateOnly.FromDateTime(DateTime.UtcNow);
+        var scopeVersion = await cacheService.GetScopeVersionAsync(CacheScopes.MedicinesSearch, cancellationToken);
+        var cacheKey = $"medicines:search:v{scopeVersion}:query={normalizedQuery}:city={(city?.Trim().ToLowerInvariant() ?? "all")}";
+        var cached = await cacheService.GetAsync<IReadOnlyCollection<MedicineSearchResponse>>(cacheKey, cancellationToken);
+        if (cached is not null)
+        {
+            return Ok(cached);
+        }
 
         var medicines = await context.Medicines
             .AsNoTracking()
@@ -78,6 +88,8 @@ public class MedicinesController(IApplicationDbContext context) : ControllerBase
             .OrderBy(medicine => medicine.BrandName)
             .Take(20)
             .ToListAsync(cancellationToken);
+
+        await cacheService.SetAsync(cacheKey, medicines, TimeSpan.FromMinutes(5), cancellationToken);
 
         return Ok(medicines);
     }

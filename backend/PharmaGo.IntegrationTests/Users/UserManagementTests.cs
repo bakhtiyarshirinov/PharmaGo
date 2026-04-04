@@ -4,6 +4,7 @@ using System.Net.Http.Json;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using PharmaGo.Application.Auth.Contracts;
+using PharmaGo.Application.Common.Contracts;
 using PharmaGo.Application.Users.Contracts;
 using PharmaGo.Domain.Models.Enums;
 using PharmaGo.IntegrationTests.Infrastructure;
@@ -55,6 +56,53 @@ public class UserManagementTests(CustomWebApplicationFactory factory) : IClassFi
         Assert.Equal(UserRole.Pharmacist, user!.Role);
         Assert.Equal(pharmacy.Id, user.PharmacyId);
         Assert.True(user.IsActive);
+    }
+
+    [Fact]
+    public async Task Moderator_ShouldGetPaginatedAndSortedUsers()
+    {
+        var moderatorLogin = await _client.PostAsJsonAsync("/api/auth/login", new LoginRequest
+        {
+            PhoneNumber = "+994500000002",
+            Password = "Moderator123!"
+        });
+
+        var moderator = await moderatorLogin.Content.ReadAsAsync<AuthResponse>();
+        Assert.NotNull(moderator);
+
+        _client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", moderator!.AccessToken);
+
+        await _client.PostAsJsonAsync("/api/users", new CreateManagedUserRequest
+        {
+            FirstName = "Zaur",
+            LastName = "Last",
+            PhoneNumber = "+994551110023",
+            Email = "zaur@example.com",
+            Password = "TestPassword123!",
+            Role = UserRole.User
+        });
+
+        await _client.PostAsJsonAsync("/api/users", new CreateManagedUserRequest
+        {
+            FirstName = "Aynur",
+            LastName = "First",
+            PhoneNumber = "+994551110024",
+            Email = "aynur@example.com",
+            Password = "TestPassword123!",
+            Role = UserRole.User
+        });
+
+        var listResponse = await _client.GetAsync("/api/users?page=1&pageSize=2&sortBy=firstName&sortDirection=asc");
+        Assert.Equal(HttpStatusCode.OK, listResponse.StatusCode);
+
+        var payload = await listResponse.Content.ReadAsAsync<PagedResponse<UserManagementResponse>>();
+        Assert.NotNull(payload);
+        Assert.Equal(1, payload!.Page);
+        Assert.Equal(2, payload.PageSize);
+        Assert.True(payload.TotalCount >= 2);
+        Assert.Equal("firstName", payload.SortBy);
+        Assert.Equal("asc", payload.SortDirection);
+        Assert.Equal(2, payload.Items.Count);
     }
 
     [Fact]

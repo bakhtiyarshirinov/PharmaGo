@@ -1,0 +1,10 @@
+.git
+.gitignore
+**/bin
+**/obj
+**/.vs
+**/.idea
+**/.vscode
+backend/PharmaGo.IntegrationTests
+README.md
+docs

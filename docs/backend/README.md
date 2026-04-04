@@ -19,7 +19,9 @@ The backend solves four main business flows:
 - JWT bearer authentication
 - refresh tokens with rotation and revocation
 - roles: `User`, `Pharmacist`, `Moderator`
+- permission-based authorization policies
 - PostgreSQL persistence through EF Core
+- Redis-ready distributed caching with in-memory fallback
 - automatic migrations on startup
 - seed data for pharmacies, medicines and staff accounts
 - Swagger UI in development
@@ -27,6 +29,7 @@ The backend solves four main business flows:
 - background worker for auto-expiring reservations
 - audit log storage for sensitive business actions
 - health endpoint at `/health`
+- Docker Compose stack for `api + postgres + redis`
 
 ## Default Seed Accounts
 - `Pharmacist`: `+994500000001` / `Pharmacist123!`
@@ -83,6 +86,8 @@ Workflow rules:
 - Swagger UI is enabled in development environment
 - database health is included in `/health`
 - global exception handling is enabled through ASP.NET Core `ProblemDetails`
+- hot read endpoints use distributed cache versioning for safe invalidation
+- if `Redis:ConnectionString` is empty, the app falls back to in-memory distributed cache
 
 Read these next:
 

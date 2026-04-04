@@ -36,6 +36,8 @@ public class JwtTokenGenerator(IOptions<JwtSettings> options) : IJwtTokenGenerat
             claims.Add(new Claim("pharmacy_id", user.PharmacyId.Value.ToString()));
         }
 
+        claims.AddRange(RolePermissionProvider.GetPermissionClaims(user.Role));
+
         var signingCredentials = new SigningCredentials(
             new SymmetricSecurityKey(Encoding.UTF8.GetBytes(_settings.SecretKey)),
             SecurityAlgorithms.HmacSha256);

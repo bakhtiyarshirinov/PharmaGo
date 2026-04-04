@@ -5,14 +5,18 @@ using PharmaGo.Application.Abstractions;
 using PharmaGo.Application.Dashboard.Queries.GetDashboardSummary;
 using PharmaGo.Application.Dashboard.Queries.GetRecentReservations;
 using PharmaGo.Domain.Models.Enums;
+using PharmaGo.Infrastructure.Caching;
 using PharmaGo.Infrastructure.Auth;
 
 namespace PharmaGo.Api.Controllers;
 
 [ApiController]
 [Route("api/[controller]")]
-[Authorize(Policy = RoleNames.StaffPolicy)]
-public class DashboardController(IApplicationDbContext context, ICurrentUserService currentUserService) : ControllerBase
+[Authorize(Policy = PolicyNames.ViewDashboard)]
+public class DashboardController(
+    IApplicationDbContext context,
+    IAppCacheService cacheService,
+    ICurrentUserService currentUserService) : ControllerBase
 {
     [HttpGet("summary")]
     [ProducesResponseType(typeof(DashboardSummaryResponse), StatusCodes.Status200OK)]
@@ -24,6 +28,14 @@ public class DashboardController(IApplicationDbContext context, ICurrentUserServ
         if (effectivePharmacyId == Guid.Empty)
         {
             return Forbid();
+        }
+
+        var scopeVersion = await cacheService.GetScopeVersionAsync(CacheScopes.Dashboard, cancellationToken);
+        var cacheKey = $"dashboard:summary:v{scopeVersion}:pharmacy={effectivePharmacyId?.ToString() ?? "all"}";
+        var cached = await cacheService.GetAsync<DashboardSummaryResponse>(cacheKey, cancellationToken);
+        if (cached is not null)
+        {
+            return Ok(cached);
         }
 
         var pharmacyName = effectivePharmacyId.HasValue
@@ -81,6 +93,8 @@ public class DashboardController(IApplicationDbContext context, ICurrentUserServ
                 .SumAsync(x => x.TotalAmount, cancellationToken)
         };
 
+        await cacheService.SetAsync(cacheKey, response, TimeSpan.FromMinutes(1), cancellationToken);
+
         return Ok(response);
     }
 
@@ -94,6 +108,14 @@ public class DashboardController(IApplicationDbContext context, ICurrentUserServ
         if (effectivePharmacyId == Guid.Empty)
         {
             return Forbid();
+        }
+
+        var scopeVersion = await cacheService.GetScopeVersionAsync(CacheScopes.Dashboard, cancellationToken);
+        var cacheKey = $"dashboard:recent:v{scopeVersion}:pharmacy={effectivePharmacyId?.ToString() ?? "all"}";
+        var cached = await cacheService.GetAsync<IReadOnlyCollection<DashboardRecentReservationResponse>>(cacheKey, cancellationToken);
+        if (cached is not null)
+        {
+            return Ok(cached);
         }
 
         var reservations = await context.Reservations
@@ -113,6 +135,8 @@ public class DashboardController(IApplicationDbContext context, ICurrentUserServ
                 CreatedAtUtc = x.CreatedAtUtc
             })
             .ToListAsync(cancellationToken);
+
+        await cacheService.SetAsync(cacheKey, reservations, TimeSpan.FromMinutes(1), cancellationToken);
 
         return Ok(reservations);
     }

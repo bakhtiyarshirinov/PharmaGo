@@ -1,0 +1,61 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: pharmago-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-pharmago_db}
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres} -d ${POSTGRES_DB:-pharmago_db}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    container_name: pharmago-redis
+    restart: unless-stopped
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  api:
+    build:
+      context: .
+      dockerfile: backend/PharmaGo.Api/Dockerfile
+    container_name: pharmago-api
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      ASPNETCORE_ENVIRONMENT: Development
+      ConnectionStrings__DefaultConnection: Host=postgres;Port=5432;Database=${POSTGRES_DB:-pharmago_db};Username=${POSTGRES_USER:-postgres};Password=${POSTGRES_PASSWORD:-postgres}
+      Redis__ConnectionString: redis:6379
+      Redis__InstanceName: PharmaGo:
+      Jwt__Issuer: PharmaGo.Api
+      Jwt__Audience: PharmaGo.Clients
+      Jwt__SecretKey: ${JWT_SECRET_KEY:-PharmaGo.Super.Secret.Jwt.Key.For.Docker.Development.2026}
+      Jwt__ExpirationMinutes: ${JWT_EXPIRATION_MINUTES:-60}
+      RefreshToken__ExpirationDays: ${REFRESH_EXPIRATION_DAYS:-14}
+      ReservationExpiration__PollingIntervalSeconds: ${RESERVATION_EXPIRATION_POLL_SECONDS:-15}
+    ports:
+      - "${API_PORT:-8080}:8080"
+
+volumes:
+  postgres-data:
+  redis-data:

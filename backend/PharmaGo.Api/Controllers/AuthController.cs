@@ -7,6 +7,7 @@ using PharmaGo.Application.Abstractions;
 using PharmaGo.Application.Auth.Contracts;
 using PharmaGo.Domain.Models;
 using PharmaGo.Domain.Models.Enums;
+using PharmaGo.Infrastructure.Caching;
 using PharmaGo.Infrastructure.Auth;
 
 namespace PharmaGo.Api.Controllers;
@@ -15,6 +16,7 @@ namespace PharmaGo.Api.Controllers;
 [Route("api/[controller]")]
 public class AuthController(
     IApplicationDbContext context,
+    IAppCacheService cacheService,
     IAuditService auditService,
     IRefreshTokenService refreshTokenService,
     IJwtTokenGenerator jwtTokenGenerator,
@@ -83,6 +85,8 @@ public class AuthController(
             Request.Headers.UserAgent.ToString(),
             cancellationToken);
         await context.SaveChangesAsync(cancellationToken);
+        await cacheService.BumpScopeVersionAsync(CacheScopes.Users, cancellationToken);
+        await cacheService.BumpScopeVersionAsync(CacheScopes.Dashboard, cancellationToken);
         await auditService.WriteAsync(
             action: "auth.register",
             entityName: "AppUser",
@@ -168,7 +172,7 @@ public class AuthController(
         return user is null ? Unauthorized() : Ok(user);
     }
 
-    [Authorize(Policy = RoleNames.ModeratorPolicy)]
+    [Authorize(Policy = PolicyNames.ManageUsers)]
     [HttpPut("users/{id:guid}/role")]
     [ProducesResponseType(typeof(UserProfileResponse), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
@@ -183,8 +187,20 @@ public class AuthController(
             return NotFound();
         }
 
+        if (request.Role == UserRole.Moderator)
+        {
+            return BadRequest("Moderator role cannot be assigned from this endpoint.");
+        }
+
+        if (request.Role == UserRole.Pharmacist && !user.PharmacyId.HasValue)
+        {
+            return BadRequest("Pharmacist role requires a pharmacy assignment. Use the users management endpoint.");
+        }
+
         user.Role = request.Role;
         await context.SaveChangesAsync(cancellationToken);
+        await cacheService.BumpScopeVersionAsync(CacheScopes.Users, cancellationToken);
+        await cacheService.BumpScopeVersionAsync(CacheScopes.Dashboard, cancellationToken);
         await auditService.WriteAsync(
             action: "user.role.updated",
             entityName: "AppUser",

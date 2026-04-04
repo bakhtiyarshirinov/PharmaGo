@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using PharmaGo.Application.Abstractions;
+using PharmaGo.Application.Medicines.Queries.GetMedicineAvailability;
 using PharmaGo.Application.Medicines.Queries.SearchMedicines;
 using PharmaGo.Infrastructure.Caching;
 
@@ -10,7 +11,8 @@ namespace PharmaGo.Api.Controllers;
 [Route("api/[controller]")]
 public class MedicinesController(
     IApplicationDbContext context,
-    IAppCacheService cacheService) : ControllerBase
+    IAppCacheService cacheService,
+    IMedicineAvailabilityService medicineAvailabilityService) : ControllerBase
 {
     [HttpGet("search")]
     [ProducesResponseType(typeof(IReadOnlyCollection<MedicineSearchResponse>), StatusCodes.Status200OK)]
@@ -92,5 +94,31 @@ public class MedicinesController(
         await cacheService.SetAsync(cacheKey, medicines, TimeSpan.FromMinutes(5), cancellationToken);
 
         return Ok(medicines);
+    }
+
+    [HttpGet("{id:guid}/availability")]
+    [ProducesResponseType(typeof(MedicineAvailabilityResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<ActionResult<MedicineAvailabilityResponse>> GetAvailability(
+        Guid id,
+        [FromQuery] GetMedicineAvailabilityRequest request,
+        CancellationToken cancellationToken)
+    {
+        if ((request.Latitude.HasValue && !request.Longitude.HasValue) ||
+            (!request.Latitude.HasValue && request.Longitude.HasValue))
+        {
+            return BadRequest("Latitude and Longitude must be provided together.");
+        }
+
+        request.MedicineId = id;
+
+        var response = await medicineAvailabilityService.GetAvailabilityAsync(request, cancellationToken);
+        if (response is null)
+        {
+            return NotFound("Medicine was not found.");
+        }
+
+        return Ok(response);
     }
 }

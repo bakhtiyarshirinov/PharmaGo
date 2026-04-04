@@ -18,6 +18,7 @@ This file documents the purpose of every backend source file currently in the re
 ### Controllers
 - `backend/PharmaGo.Api/Controllers/AuthController.cs`: authentication and role management endpoints.
 - `backend/PharmaGo.Api/Controllers/MedicinesController.cs`: public medicine search endpoints with availability projection.
+- `backend/PharmaGo.Api/Controllers/PharmaciesController.cs`: public nearby-pharmacy discovery endpoint with geo filters and paging.
 - `backend/PharmaGo.Api/Controllers/UsersController.cs`: moderator-only user management endpoints with soft delete and restore.
 - `backend/PharmaGo.Api/Controllers/ReservationsController.cs`: reservation create, read and workflow transition endpoints.
 - `backend/PharmaGo.Api/Controllers/StocksController.cs`: inventory management and low-stock alert endpoints for staff.
@@ -44,6 +45,8 @@ This file documents the purpose of every backend source file currently in the re
 - `backend/PharmaGo.Application/Abstractions/IAuditService.cs`: contract for writing audit trail records.
 - `backend/PharmaGo.Application/Abstractions/ICurrentUserService.cs`: contract for reading current authenticated user identity from request context.
 - `backend/PharmaGo.Application/Abstractions/IJwtTokenGenerator.cs`: contract for JWT access token generation.
+- `backend/PharmaGo.Application/Abstractions/IMedicineAvailabilityService.cs`: contract for public read-model lookup of pharmacy availability for a medicine.
+- `backend/PharmaGo.Application/Abstractions/IPharmacyDiscoveryService.cs`: contract for nearby-pharmacy discovery and filtering.
 - `backend/PharmaGo.Application/Abstractions/IRefreshTokenService.cs`: contract for issuing, loading and revoking refresh tokens.
 - `backend/PharmaGo.Application/Abstractions/IReservationStateService.cs`: contract for releasing and completing reserved stock safely.
 
@@ -60,8 +63,15 @@ This file documents the purpose of every backend source file currently in the re
 - `backend/PharmaGo.Application/Common/Contracts/PagedResponse.cs`: generic paged response wrapper with totals, pages and sorting metadata.
 
 ### Medicines
+- `backend/PharmaGo.Application/Medicines/Queries/GetMedicineAvailability/GetMedicineAvailabilityRequest.cs`: query model for medicine availability lookup with geo and stock filters.
+- `backend/PharmaGo.Application/Medicines/Queries/GetMedicineAvailability/MedicineAvailabilityPharmacyResponse.cs`: pharmacy row returned by medicine availability endpoint.
+- `backend/PharmaGo.Application/Medicines/Queries/GetMedicineAvailability/MedicineAvailabilityResponse.cs`: aggregate medicine availability response with medicine details and pharmacy list.
 - `backend/PharmaGo.Application/Medicines/Queries/SearchMedicines/MedicineAvailabilityDto.cs`: pharmacy-level availability row for search results.
 - `backend/PharmaGo.Application/Medicines/Queries/SearchMedicines/MedicineSearchResponse.cs`: medicine search result DTO including catalog data and stock aggregates.
+
+### Pharmacies
+- `backend/PharmaGo.Application/Pharmacies/Queries/SearchNearbyPharmacies/NearbyPharmacyResponse.cs`: paged pharmacy discovery row including distance, availability summary and operating flags.
+- `backend/PharmaGo.Application/Pharmacies/Queries/SearchNearbyPharmacies/SearchNearbyPharmaciesRequest.cs`: query model for nearby-pharmacy search and paging.
 
 ### Reservations
 - `backend/PharmaGo.Application/Reservations/Commands/CreateReservation/CreateReservationItemRequest.cs`: item payload for reservation creation.
@@ -165,6 +175,9 @@ This file documents the purpose of every backend source file currently in the re
 
 ### Services
 - `backend/PharmaGo.Infrastructure/Services/AuditService.cs`: writes persisted audit records to the database.
+- `backend/PharmaGo.Infrastructure/Services/MedicineAvailabilityService.cs`: builds consumer-facing pharmacy availability read models for a selected medicine.
+- `backend/PharmaGo.Infrastructure/Services/PharmacyDiscoveryService.cs`: searches nearby pharmacies with geo, opening-hours and availability summary calculations.
+- `backend/PharmaGo.Infrastructure/Services/PharmacyDiscoverySupport.cs`: shared helpers for distance calculation and opening-hours evaluation.
 - `backend/PharmaGo.Infrastructure/Services/RefreshTokenService.cs`: generates, hashes, rotates and revokes refresh tokens.
 - `backend/PharmaGo.Infrastructure/Services/ReservationStateService.cs`: encapsulates stock release and stock deduction rules for reservation state changes.
 
@@ -180,6 +193,8 @@ This file documents the purpose of every backend source file currently in the re
 
 ### Test Suites
 - `backend/PharmaGo.IntegrationTests/Auth/AuthFlowTests.cs`: covers register, refresh rotation, logout and revoke-all flows.
+- `backend/PharmaGo.IntegrationTests/Medicines/MedicineAvailabilityTests.cs`: covers consumer-facing medicine availability lookup and reservable-only filtering.
+- `backend/PharmaGo.IntegrationTests/Pharmacies/PharmacyDiscoveryTests.cs`: covers nearby-pharmacy discovery, open-now filtering and invalid geo input handling.
 - `backend/PharmaGo.IntegrationTests/Reservations/ReservationFlowTests.cs`: covers authenticated reservation creation and pharmacist completion workflow.
 - `backend/PharmaGo.IntegrationTests/Users/UserManagementTests.cs`: covers moderator account creation, soft delete and restore scenarios.
 

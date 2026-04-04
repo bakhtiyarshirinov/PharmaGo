@@ -51,11 +51,33 @@ Endpoint:
   - searches by brand name, generic name or barcode
   - filters out inactive, expired and zero-availability stock
   - returns pharmacy-level availability and minimum retail price
+- `GET /api/medicines/{id}/availability`
+  - public
+  - returns pharmacies that currently stock the selected medicine
+  - supports `city`, `latitude`, `longitude`, `radiusKm`, `openNow`, `onlyReservable` and `sortBy`
 
 Important details:
 - uses PostgreSQL `ILIKE`
 - returns only medicines that currently have positive availability
 - search responses are cached and invalidated when stock or reservation state changes
+- availability response can sort by distance or price and includes open-now and reservation capability flags
+
+## PharmaciesController
+File: `backend/PharmaGo.Api/Controllers/PharmaciesController.cs`
+
+Purpose:
+- exposes location-aware pharmacy discovery for mobile, bot and web clients
+
+Endpoint:
+- `GET /api/pharmacies/search`
+  - public
+  - supports `query`, `city`, `latitude`, `longitude`, `radiusKm`, `openNow`, `supportsReservations`, `hasDelivery`, `page`, `pageSize`, `sortBy` and `sortDirection`
+
+Important details:
+- returns distance when client coordinates are provided
+- evaluates `isOpenNow` from 24/7 flag or weekly opening-hours JSON
+- includes stock summary metrics per pharmacy for consumer discovery cards
+- uses additive geo fields and does not break existing pharmacy data contracts
 
 ## UsersController
 File: `backend/PharmaGo.Api/Controllers/UsersController.cs`

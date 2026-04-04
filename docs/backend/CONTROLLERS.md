@@ -45,11 +45,12 @@ File: `backend/PharmaGo.Api/Controllers/MedicinesController.cs`
 Purpose:
 - exposes medicine search for mobile, bot and web clients
 
-Endpoint:
+Endpoints:
 - `GET /api/medicines/search?query=...&city=...`
   - public
   - searches by brand name, generic name or barcode
   - filters out inactive, expired and zero-availability stock
+  - supports optional `latitude`, `longitude`, `radiusKm`, `openNow`, `onlyReservable`, `sortBy`, `limit` and `availabilityLimit`
   - returns pharmacy-level availability and minimum retail price
 - `GET /api/medicines/{id}/availability`
   - public
@@ -60,6 +61,8 @@ Important details:
 - uses PostgreSQL `ILIKE`
 - returns only medicines that currently have positive availability
 - search responses are cached and invalidated when stock or reservation state changes
+- search can rank by relevance, distance or price
+- nested availabilities are distance-aware and capped with `availabilityLimit` for smaller payloads
 - availability response can sort by distance or price and includes open-now and reservation capability flags
 
 ## PharmaciesController

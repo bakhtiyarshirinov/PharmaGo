@@ -54,6 +54,7 @@ public static class DependencyInjection
         services.AddScoped<IJwtTokenGenerator, JwtTokenGenerator>();
         services.AddScoped<IRefreshTokenService, RefreshTokenService>();
         services.AddScoped<IAuditService, AuditService>();
+        services.AddScoped<IMedicineSearchService, MedicineSearchService>();
         services.AddScoped<IPharmacyDiscoveryService, PharmacyDiscoveryService>();
         services.AddScoped<IMedicineAvailabilityService, MedicineAvailabilityService>();
         services.AddScoped<IPasswordHasher<AppUser>, PasswordHasher<AppUser>>();

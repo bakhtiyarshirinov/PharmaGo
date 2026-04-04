@@ -9,7 +9,9 @@ public class MedicineSearchResponse
     public string Strength { get; init; } = string.Empty;
     public string Manufacturer { get; init; } = string.Empty;
     public bool RequiresPrescription { get; init; }
+    public int PharmacyCount { get; init; }
     public int TotalAvailableQuantity { get; init; }
     public decimal? MinRetailPrice { get; init; }
+    public double? NearestDistanceKm { get; init; }
     public IReadOnlyCollection<MedicineAvailabilityDto> Availabilities { get; init; } = Array.Empty<MedicineAvailabilityDto>();
 }

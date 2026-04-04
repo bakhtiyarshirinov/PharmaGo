@@ -147,6 +147,7 @@ Endpoints:
 Important details:
 - validates requested quantities and reservation lifetime
 - reserves from the earliest-expiring stock first
+- wraps reservation writes in database transactions and detects concurrent stock changes
 - sends SignalR events on create and status changes
 - publishes low-stock notifications when reservations reduce availability
 - writes audit records for create and status transitions
@@ -182,6 +183,7 @@ Important details:
 - moderators can work across all pharmacies
 - prevents duplicate `(pharmacy, medicine, batch)` records
 - prevents reducing quantity below already reserved amount
+- returns `409 Conflict` when the stock row changed during an update
 - picks the cheapest available supplier option per medicine
 - respects supplier minimum order quantity and supplier availability
 - emits `stock.low` and `stock.restored` SignalR events

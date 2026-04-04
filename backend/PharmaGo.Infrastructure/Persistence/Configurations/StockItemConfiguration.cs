@@ -19,6 +19,9 @@ public class StockItemConfiguration : IEntityTypeConfiguration<StockItem>
         builder.Property(x => x.RetailPrice).HasColumnType("numeric(18,2)");
         builder.Property(x => x.ReorderLevel).IsRequired();
         builder.Property(x => x.IsReservable).HasDefaultValue(true);
+        builder.Property(x => x.ConcurrencyToken)
+            .HasDefaultValueSql("gen_random_uuid()")
+            .IsConcurrencyToken();
 
         builder.HasIndex(x => new { x.PharmacyId, x.MedicineId });
         builder.HasIndex(x => x.ExpirationDate);

@@ -18,6 +18,7 @@ public class Reservation : BaseEntity
     public DateTime? CancelledAtUtc { get; set; }
     public decimal TotalAmount { get; set; }
     public string? TelegramChatId { get; set; }
+    public Guid ConcurrencyToken { get; set; } = Guid.NewGuid();
 
     public ICollection<ReservationItem> Items { get; set; } = new List<ReservationItem>();
 }

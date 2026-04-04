@@ -137,7 +137,8 @@ public static class ApplicationDbContextSeeder
                     RetailPrice = 2.50m,
                     ReorderLevel = 20,
                     IsReservable = true,
-                    LastStockUpdatedAtUtc = DateTime.UtcNow
+                    LastStockUpdatedAtUtc = DateTime.UtcNow,
+                    ConcurrencyToken = Guid.NewGuid()
                 },
                 new StockItem
                 {
@@ -151,7 +152,8 @@ public static class ApplicationDbContextSeeder
                     RetailPrice = 3.40m,
                     ReorderLevel = 15,
                     IsReservable = true,
-                    LastStockUpdatedAtUtc = DateTime.UtcNow
+                    LastStockUpdatedAtUtc = DateTime.UtcNow,
+                    ConcurrencyToken = Guid.NewGuid()
                 },
                 new StockItem
                 {
@@ -165,7 +167,8 @@ public static class ApplicationDbContextSeeder
                     RetailPrice = 2.30m,
                     ReorderLevel = 10,
                     IsReservable = true,
-                    LastStockUpdatedAtUtc = DateTime.UtcNow
+                    LastStockUpdatedAtUtc = DateTime.UtcNow,
+                    ConcurrencyToken = Guid.NewGuid()
                 },
                 new StockItem
                 {
@@ -179,7 +182,8 @@ public static class ApplicationDbContextSeeder
                     RetailPrice = 6.80m,
                     ReorderLevel = 8,
                     IsReservable = true,
-                    LastStockUpdatedAtUtc = DateTime.UtcNow
+                    LastStockUpdatedAtUtc = DateTime.UtcNow,
+                    ConcurrencyToken = Guid.NewGuid()
                 }
             };
 

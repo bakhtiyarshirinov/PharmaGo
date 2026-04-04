@@ -115,10 +115,10 @@ This file documents the purpose of every backend source file currently in the re
 - `backend/PharmaGo.Domain/Models/Pharmacy.cs`: pharmacy branch entity with contact and location data.
 - `backend/PharmaGo.Domain/Models/RefreshToken.cs`: persisted refresh token record with revocation and rotation metadata.
 - `backend/PharmaGo.Domain/Models/Depot.cs`: wholesale depot or warehouse entity used for upstream supply.
-- `backend/PharmaGo.Domain/Models/StockItem.cs`: per-batch stock record with availability, pricing and reorder logic.
 - `backend/PharmaGo.Domain/Models/Reservation.cs`: reservation aggregate root with status, customer, pharmacy and reserved-until timestamp.
 - `backend/PharmaGo.Domain/Models/ReservationItem.cs`: line item inside a reservation referencing medicine and quantity.
 - `backend/PharmaGo.Domain/Models/SupplierMedicine.cs`: relation between depot and medicine including wholesale conditions.
+- `backend/PharmaGo.Domain/Models/StockItem.cs`: per-batch stock record with availability, pricing, reorder logic and optimistic concurrency token.
 
 ### Enums
 - `backend/PharmaGo.Domain/Models/Enums/ReservationStatus.cs`: allowed reservation states in the workflow.
@@ -182,7 +182,7 @@ This file documents the purpose of every backend source file currently in the re
 - `backend/PharmaGo.Infrastructure/Services/PharmacyDiscoveryService.cs`: searches nearby pharmacies with geo, opening-hours and availability summary calculations.
 - `backend/PharmaGo.Infrastructure/Services/PharmacyDiscoverySupport.cs`: shared helpers for distance calculation and opening-hours evaluation.
 - `backend/PharmaGo.Infrastructure/Services/RefreshTokenService.cs`: generates, hashes, rotates and revokes refresh tokens.
-- `backend/PharmaGo.Infrastructure/Services/ReservationStateService.cs`: encapsulates stock release and stock deduction rules for reservation state changes.
+- `backend/PharmaGo.Infrastructure/Services/ReservationStateService.cs`: encapsulates stock release and stock deduction rules for reservation state changes and fails fast on inconsistent reserved quantities.
 
 ## PharmaGo.IntegrationTests
 
@@ -199,7 +199,7 @@ This file documents the purpose of every backend source file currently in the re
 - `backend/PharmaGo.IntegrationTests/Medicines/MedicineAvailabilityTests.cs`: covers consumer-facing medicine availability lookup and reservable-only filtering.
 - `backend/PharmaGo.IntegrationTests/Medicines/MedicineSearchTests.cs`: covers geo-aware medicine search, reservable-only filtering and invalid coordinate input handling.
 - `backend/PharmaGo.IntegrationTests/Pharmacies/PharmacyDiscoveryTests.cs`: covers nearby-pharmacy discovery, open-now filtering and invalid geo input handling.
-- `backend/PharmaGo.IntegrationTests/Reservations/ReservationFlowTests.cs`: covers authenticated reservation creation and pharmacist completion workflow.
+- `backend/PharmaGo.IntegrationTests/Reservations/ReservationFlowTests.cs`: covers authenticated reservation creation, pharmacist completion workflow and concurrent reservation hardening.
 - `backend/PharmaGo.IntegrationTests/Users/UserManagementTests.cs`: covers moderator account creation, soft delete and restore scenarios.
 
 ## Runtime Tooling

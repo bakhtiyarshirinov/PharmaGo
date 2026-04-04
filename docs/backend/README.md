@@ -29,6 +29,7 @@ The backend solves four main business flows:
 - SignalR hub for realtime reservation and stock events
 - background worker for auto-expiring reservations
 - audit log storage for sensitive business actions
+- optimistic concurrency protection on reservation and stock write paths
 - health endpoint at `/health`
 - Docker Compose stack for `api + postgres + redis`
 

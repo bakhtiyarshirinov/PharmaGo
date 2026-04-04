@@ -412,7 +412,15 @@ public class StocksController(
         stockItem.ReorderLevel = request.ReorderLevel;
         stockItem.IsActive = request.IsActive;
 
-        await context.SaveChangesAsync(cancellationToken);
+        try
+        {
+            await context.SaveChangesAsync(cancellationToken);
+        }
+        catch (DbUpdateConcurrencyException)
+        {
+            return Conflict("Stock item changed while updating inventory. Please refresh and try again.");
+        }
+
         await cacheService.BumpScopeVersionAsync(CacheScopes.MedicinesSearch, cancellationToken);
         await cacheService.BumpScopeVersionAsync(CacheScopes.Dashboard, cancellationToken);
 

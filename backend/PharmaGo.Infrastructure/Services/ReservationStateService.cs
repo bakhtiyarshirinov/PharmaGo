@@ -30,6 +30,12 @@ public class ReservationStateService(ApplicationDbContext context) : IReservatio
                 stockItem.ReservedQuantity -= quantity;
                 quantityToRelease -= quantity;
             }
+
+            if (quantityToRelease > 0)
+            {
+                throw new InvalidOperationException(
+                    $"Reserved stock could not be fully released for medicine '{item.MedicineId}'.");
+            }
         }
     }
 
@@ -56,6 +62,12 @@ public class ReservationStateService(ApplicationDbContext context) : IReservatio
                 stockItem.ReservedQuantity -= quantity;
                 stockItem.Quantity -= quantity;
                 quantityToComplete -= quantity;
+            }
+
+            if (quantityToComplete > 0)
+            {
+                throw new InvalidOperationException(
+                    $"Reserved stock could not be fully completed for medicine '{item.MedicineId}'.");
             }
         }
     }

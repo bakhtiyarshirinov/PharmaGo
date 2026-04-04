@@ -183,4 +183,92 @@ public class ReservationFlowTests(CustomWebApplicationFactory factory) : IClassF
         Assert.Equal("PharmaGo Main Depot", suggestion.DepotName);
         Assert.Equal(50m, suggestion.EstimatedWholesaleCost);
     }
+
+    [Fact]
+    public async Task ConcurrentReservationRequests_ShouldNotOversellStock()
+    {
+        using (var scope = factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+            var stockItem = await db.StockItems
+                .Include(x => x.Pharmacy)
+                .Include(x => x.Medicine)
+                .FirstAsync(x => x.Pharmacy!.Name == "PharmaGo Central" && x.Medicine!.BrandName == "Panadol");
+
+            stockItem.Quantity = 100;
+            stockItem.ReservedQuantity = 0;
+            stockItem.LastStockUpdatedAtUtc = DateTime.UtcNow;
+            await db.SaveChangesAsync();
+        }
+
+        var client1 = factory.CreateClient();
+        var client2 = factory.CreateClient();
+
+        var auth1 = await RegisterAndAuthorizeAsync(client1, "+994551110101", "race1@example.com");
+        var auth2 = await RegisterAndAuthorizeAsync(client2, "+994551110102", "race2@example.com");
+
+        Assert.NotNull(auth1);
+        Assert.NotNull(auth2);
+
+        using var scope2 = factory.Services.CreateScope();
+        var db2 = scope2.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+        var pharmacyId = await db2.Pharmacies.Where(x => x.Name == "PharmaGo Central").Select(x => x.Id).FirstAsync();
+        var medicineId = await db2.Medicines.Where(x => x.BrandName == "Panadol").Select(x => x.Id).FirstAsync();
+
+        var request = new CreateReservationRequest
+        {
+            PharmacyId = pharmacyId,
+            ReserveForHours = 2,
+            Items =
+            [
+                new CreateReservationItemRequest
+                {
+                    MedicineId = medicineId,
+                    Quantity = 80
+                }
+            ]
+        };
+
+        var task1 = client1.PostAsJsonAsync("/api/reservations", request);
+        var task2 = client2.PostAsJsonAsync("/api/reservations", request);
+
+        var responses = await Task.WhenAll(task1, task2);
+        var createdCount = responses.Count(x => x.StatusCode == HttpStatusCode.Created);
+        var rejectedCount = responses.Count(x =>
+            x.StatusCode == HttpStatusCode.Conflict ||
+            x.StatusCode == HttpStatusCode.BadRequest);
+
+        Assert.Equal(1, createdCount);
+        Assert.Equal(1, rejectedCount);
+
+        var stockAfter = await db2.StockItems.AsNoTracking()
+            .FirstAsync(x => x.PharmacyId == pharmacyId && x.MedicineId == medicineId);
+        var reservations = await db2.Reservations.AsNoTracking()
+            .Where(x => x.PharmacyId == pharmacyId && x.CustomerId != Guid.Empty)
+            .ToListAsync();
+
+        Assert.Equal(80, stockAfter.ReservedQuantity);
+        Assert.Equal(100, stockAfter.Quantity);
+        Assert.Single(reservations, x => x.Status == ReservationStatus.Confirmed);
+    }
+
+    private static async Task<AuthResponse?> RegisterAndAuthorizeAsync(HttpClient client, string phoneNumber, string email)
+    {
+        var registerResponse = await client.PostAsJsonAsync("/api/auth/register", new RegisterRequest
+        {
+            FirstName = "Race",
+            LastName = "User",
+            PhoneNumber = phoneNumber,
+            Email = email,
+            Password = "TestPassword123!"
+        });
+
+        var auth = await registerResponse.Content.ReadAsAsync<AuthResponse>();
+        if (auth is not null)
+        {
+            client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", auth.AccessToken);
+        }
+
+        return auth;
+    }
 }

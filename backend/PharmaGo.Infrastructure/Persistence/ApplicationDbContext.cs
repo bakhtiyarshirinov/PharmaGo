@@ -45,6 +45,33 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
             }
         }
 
+        foreach (var entry in ChangeTracker.Entries<StockItem>())
+        {
+            if (entry.State == EntityState.Added && entry.Entity.ConcurrencyToken == Guid.Empty)
+            {
+                entry.Entity.ConcurrencyToken = Guid.NewGuid();
+            }
+
+            if (entry.State == EntityState.Modified)
+            {
+                entry.Entity.ConcurrencyToken = Guid.NewGuid();
+                entry.Entity.LastStockUpdatedAtUtc = utcNow;
+            }
+        }
+
+        foreach (var entry in ChangeTracker.Entries<Reservation>())
+        {
+            if (entry.State == EntityState.Added && entry.Entity.ConcurrencyToken == Guid.Empty)
+            {
+                entry.Entity.ConcurrencyToken = Guid.NewGuid();
+            }
+
+            if (entry.State == EntityState.Modified)
+            {
+                entry.Entity.ConcurrencyToken = Guid.NewGuid();
+            }
+        }
+
         return base.SaveChangesAsync(cancellationToken);
     }
 }

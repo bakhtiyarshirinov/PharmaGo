@@ -17,6 +17,9 @@ public class ReservationConfiguration : IEntityTypeConfiguration<Reservation>
         builder.Property(x => x.Notes).HasMaxLength(1000);
         builder.Property(x => x.TotalAmount).HasColumnType("numeric(18,2)");
         builder.Property(x => x.TelegramChatId).HasMaxLength(128);
+        builder.Property(x => x.ConcurrencyToken)
+            .HasDefaultValueSql("gen_random_uuid()")
+            .IsConcurrencyToken();
 
         builder.HasIndex(x => x.ReservationNumber).IsUnique();
         builder.HasIndex(x => new { x.CustomerId, x.Status });

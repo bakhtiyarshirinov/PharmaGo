@@ -17,6 +17,7 @@ public class StockItem : BaseEntity
     public int ReorderLevel { get; set; }
     public bool IsReservable { get; set; } = true;
     public DateTime? LastStockUpdatedAtUtc { get; set; }
+    public Guid ConcurrencyToken { get; set; } = Guid.NewGuid();
     public bool IsActive { get; set; } = true;
 
     public int AvailableQuantity => Math.Max(0, Quantity - ReservedQuantity);

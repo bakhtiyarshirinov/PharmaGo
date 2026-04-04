@@ -15,6 +15,7 @@ namespace PharmaGo.Api.Controllers;
 [Route("api/[controller]")]
 public class AuthController(
     IApplicationDbContext context,
+    IAuditService auditService,
     IJwtTokenGenerator jwtTokenGenerator,
     IPasswordHasher<AppUser> passwordHasher,
     ICurrentUserService currentUserService,
@@ -77,6 +78,14 @@ public class AuthController(
 
         await context.Users.AddAsync(user, cancellationToken);
         await context.SaveChangesAsync(cancellationToken);
+        await auditService.WriteAsync(
+            action: "auth.register",
+            entityName: "AppUser",
+            entityId: user.Id.ToString(),
+            userId: user.Id,
+            description: $"User {user.PhoneNumber} registered.",
+            metadata: new { user.Id, user.PhoneNumber, user.Role },
+            cancellationToken: cancellationToken);
 
         return CreatedAtAction(nameof(Me), new { }, CreateAuthResponse(user));
     }
@@ -89,6 +98,11 @@ public class AuthController(
         [FromBody] LoginRequest request,
         CancellationToken cancellationToken)
     {
+        if (string.IsNullOrWhiteSpace(request.PhoneNumber) || string.IsNullOrWhiteSpace(request.Password))
+        {
+            return BadRequest("PhoneNumber and Password are required.");
+        }
+
         var normalizedPhone = request.PhoneNumber.Trim();
 
         var user = await context.Users.FirstOrDefaultAsync(
@@ -157,6 +171,15 @@ public class AuthController(
 
         user.Role = request.Role;
         await context.SaveChangesAsync(cancellationToken);
+        await auditService.WriteAsync(
+            action: "user.role.updated",
+            entityName: "AppUser",
+            entityId: user.Id.ToString(),
+            userId: currentUserService.UserId,
+            pharmacyId: user.PharmacyId,
+            description: $"User role updated to {user.Role}.",
+            metadata: new { user.Id, user.PhoneNumber, Role = user.Role.ToString() },
+            cancellationToken: cancellationToken);
 
         return Ok(new UserProfileResponse
         {

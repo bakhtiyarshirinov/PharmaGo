@@ -9,6 +9,7 @@ using PharmaGo.Application.Abstractions;
 using PharmaGo.Domain.Models;
 using PharmaGo.Infrastructure.Auth;
 using PharmaGo.Infrastructure.Persistence;
+using PharmaGo.Infrastructure.Services;
 
 namespace PharmaGo.Infrastructure;
 
@@ -31,11 +32,29 @@ public static class DependencyInjection
         services.AddHttpContextAccessor();
         services.AddScoped<ICurrentUserService, CurrentUserService>();
         services.AddScoped<IJwtTokenGenerator, JwtTokenGenerator>();
+        services.AddScoped<IAuditService, AuditService>();
         services.AddScoped<IPasswordHasher<AppUser>, PasswordHasher<AppUser>>();
+        services.AddScoped<IReservationStateService, ReservationStateService>();
 
         services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
             .AddJwtBearer(options =>
             {
+                options.Events = new JwtBearerEvents
+                {
+                    OnMessageReceived = context =>
+                    {
+                        var accessToken = context.Request.Query["access_token"];
+                        var path = context.HttpContext.Request.Path;
+
+                        if (!string.IsNullOrWhiteSpace(accessToken) && path.StartsWithSegments("/hubs"))
+                        {
+                            context.Token = accessToken;
+                        }
+
+                        return Task.CompletedTask;
+                    }
+                };
+
                 options.TokenValidationParameters = new TokenValidationParameters
                 {
                     ValidateIssuer = true,

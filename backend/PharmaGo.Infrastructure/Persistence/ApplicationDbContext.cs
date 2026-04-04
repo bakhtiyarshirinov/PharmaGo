@@ -7,6 +7,7 @@ namespace PharmaGo.Infrastructure.Persistence;
 public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options)
     : DbContext(options), IApplicationDbContext
 {
+    public DbSet<AuditLog> AuditLogs => Set<AuditLog>();
     public DbSet<AppUser> Users => Set<AppUser>();
     public DbSet<Depot> Depots => Set<Depot>();
     public DbSet<Medicine> Medicines => Set<Medicine>();

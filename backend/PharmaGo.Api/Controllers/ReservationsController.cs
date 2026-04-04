@@ -17,7 +17,9 @@ namespace PharmaGo.Api.Controllers;
 [Route("api/[controller]")]
 public class ReservationsController(
     IApplicationDbContext context,
+    IAuditService auditService,
     ICurrentUserService currentUserService,
+    IReservationStateService reservationStateService,
     RealtimeNotificationService realtimeNotificationService) : ControllerBase
 {
     [Authorize]
@@ -207,6 +209,23 @@ public class ReservationsController(
 
         await context.Reservations.AddAsync(reservation, cancellationToken);
         await context.SaveChangesAsync(cancellationToken);
+        await auditService.WriteAsync(
+            action: "reservation.created",
+            entityName: "Reservation",
+            entityId: reservation.Id.ToString(),
+            userId: customer.Id,
+            pharmacyId: reservation.PharmacyId,
+            description: $"Reservation {reservation.ReservationNumber} created.",
+            metadata: new
+            {
+                reservation.Id,
+                reservation.ReservationNumber,
+                reservation.PharmacyId,
+                reservation.CustomerId,
+                reservation.TotalAmount,
+                ItemCount = reservation.Items.Count
+            },
+            cancellationToken: cancellationToken);
 
         var response = new ReservationResponse
         {
@@ -298,42 +317,23 @@ public class ReservationsController(
         if (request.Status == ReservationStatus.Cancelled)
         {
             reservation.CancelledAtUtc = DateTime.UtcNow;
-            await ReleaseReservationStockAsync(reservation, cancellationToken);
+            await reservationStateService.ReleaseReservedStockAsync(reservation, cancellationToken);
         }
 
         if (request.Status == ReservationStatus.Expired)
         {
-            await ReleaseReservationStockAsync(reservation, cancellationToken);
+            await reservationStateService.ReleaseReservedStockAsync(reservation, cancellationToken);
         }
 
         if (request.Status == ReservationStatus.Completed)
         {
             var completedStocks = new List<StockItem>();
+            completedStocks.AddRange(await context.StockItems
+                .Where(x => x.PharmacyId == reservation.PharmacyId &&
+                    reservation.Items.Select(item => item.MedicineId).Contains(x.MedicineId))
+                .ToListAsync(cancellationToken));
 
-            foreach (var item in reservation.Items)
-            {
-                var quantityToComplete = item.Quantity;
-                var stockItems = await context.StockItems
-                    .Where(x => x.PharmacyId == reservation.PharmacyId &&
-                        x.MedicineId == item.MedicineId &&
-                        x.ReservedQuantity > 0)
-                    .OrderBy(x => x.ExpirationDate)
-                    .ToListAsync(cancellationToken);
-
-                foreach (var stockItem in stockItems)
-                {
-                    if (quantityToComplete == 0)
-                    {
-                        break;
-                    }
-
-                    var quantity = Math.Min(quantityToComplete, stockItem.ReservedQuantity);
-                    stockItem.ReservedQuantity -= quantity;
-                    stockItem.Quantity -= quantity;
-                    quantityToComplete -= quantity;
-                    completedStocks.Add(stockItem);
-                }
-            }
+            await reservationStateService.CompleteReservationAsync(reservation, cancellationToken);
 
             await context.SaveChangesAsync(cancellationToken);
             await PublishLowStockNotificationsAsync(completedStocks, cancellationToken);
@@ -353,6 +353,20 @@ public class ReservationsController(
             reservation.CustomerId,
             response,
             cancellationToken);
+        await auditService.WriteAsync(
+            action: "reservation.status.updated",
+            entityName: "Reservation",
+            entityId: reservation.Id.ToString(),
+            userId: currentUserService.UserId,
+            pharmacyId: reservation.PharmacyId,
+            description: $"Reservation {reservation.ReservationNumber} status changed to {reservation.Status}.",
+            metadata: new
+            {
+                reservation.Id,
+                reservation.ReservationNumber,
+                Status = reservation.Status.ToString()
+            },
+            cancellationToken: cancellationToken);
 
         return Ok(response);
     }
@@ -408,32 +422,6 @@ public class ReservationsController(
         }
 
         return null;
-    }
-
-    private async Task ReleaseReservationStockAsync(Reservation reservation, CancellationToken cancellationToken)
-    {
-        foreach (var item in reservation.Items)
-        {
-            var quantityToRelease = item.Quantity;
-            var stockItems = await context.StockItems
-                .Where(x => x.PharmacyId == reservation.PharmacyId &&
-                    x.MedicineId == item.MedicineId &&
-                    x.ReservedQuantity > 0)
-                .OrderBy(x => x.ExpirationDate)
-                .ToListAsync(cancellationToken);
-
-            foreach (var stockItem in stockItems)
-            {
-                if (quantityToRelease == 0)
-                {
-                    break;
-                }
-
-                var quantity = Math.Min(quantityToRelease, stockItem.ReservedQuantity);
-                stockItem.ReservedQuantity -= quantity;
-                quantityToRelease -= quantity;
-            }
-        }
     }
 
     private static bool CanChangeStatus(

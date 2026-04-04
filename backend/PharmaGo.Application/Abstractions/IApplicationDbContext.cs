@@ -5,6 +5,7 @@ namespace PharmaGo.Application.Abstractions;
 
 public interface IApplicationDbContext
 {
+    DbSet<AuditLog> AuditLogs { get; }
     DbSet<AppUser> Users { get; }
     DbSet<Depot> Depots { get; }
     DbSet<Medicine> Medicines { get; }

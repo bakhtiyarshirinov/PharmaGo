@@ -17,6 +17,7 @@ namespace PharmaGo.Api.Controllers;
 [Authorize(Policy = RoleNames.StaffPolicy)]
 public class StocksController(
     IApplicationDbContext context,
+    IAuditService auditService,
     ICurrentUserService currentUserService,
     RealtimeNotificationService realtimeNotificationService) : ControllerBase
 {
@@ -211,6 +212,23 @@ public class StocksController(
         };
 
         await PublishStockAlertIfNeededAsync(response, cancellationToken);
+        await auditService.WriteAsync(
+            action: "stock.created",
+            entityName: "StockItem",
+            entityId: stockItem.Id.ToString(),
+            userId: currentUserService.UserId,
+            pharmacyId: stockItem.PharmacyId,
+            description: $"Stock item {stockItem.BatchNumber} created for {medicine.BrandName}.",
+            metadata: new
+            {
+                stockItem.Id,
+                stockItem.PharmacyId,
+                stockItem.MedicineId,
+                stockItem.BatchNumber,
+                stockItem.Quantity,
+                stockItem.RetailPrice
+            },
+            cancellationToken: cancellationToken);
 
         return CreatedAtAction(nameof(GetByPharmacy), new { pharmacyId = stockItem.PharmacyId }, response);
     }
@@ -291,6 +309,23 @@ public class StocksController(
         };
 
         await PublishStockTransitionAsync(response, wasLowStock, cancellationToken);
+        await auditService.WriteAsync(
+            action: "stock.updated",
+            entityName: "StockItem",
+            entityId: stockItem.Id.ToString(),
+            userId: currentUserService.UserId,
+            pharmacyId: stockItem.PharmacyId,
+            description: $"Stock item {stockItem.BatchNumber} updated.",
+            metadata: new
+            {
+                stockItem.Id,
+                stockItem.Quantity,
+                stockItem.ReservedQuantity,
+                stockItem.RetailPrice,
+                stockItem.ReorderLevel,
+                stockItem.IsActive
+            },
+            cancellationToken: cancellationToken);
 
         return Ok(response);
     }

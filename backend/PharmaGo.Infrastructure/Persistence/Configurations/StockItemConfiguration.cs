@@ -18,9 +18,12 @@ public class StockItemConfiguration : IEntityTypeConfiguration<StockItem>
         builder.Property(x => x.PurchasePrice).HasColumnType("numeric(18,2)");
         builder.Property(x => x.RetailPrice).HasColumnType("numeric(18,2)");
         builder.Property(x => x.ReorderLevel).IsRequired();
+        builder.Property(x => x.IsReservable).HasDefaultValue(true);
 
         builder.HasIndex(x => new { x.PharmacyId, x.MedicineId });
         builder.HasIndex(x => x.ExpirationDate);
+        builder.HasIndex(x => new { x.MedicineId, x.PharmacyId, x.IsActive, x.IsReservable, x.ExpirationDate });
+        builder.HasIndex(x => new { x.PharmacyId, x.IsActive, x.ExpirationDate });
 
         builder.HasOne(x => x.Pharmacy)
             .WithMany(x => x.StockItems)

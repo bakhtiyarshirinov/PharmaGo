@@ -9,7 +9,13 @@ public class Pharmacy : BaseEntity
     public string? PhoneNumber { get; set; }
     public string? Latitude { get; set; }
     public string? Longitude { get; set; }
+    public decimal? LocationLatitude { get; set; }
+    public decimal? LocationLongitude { get; set; }
+    public string? OpeningHoursJson { get; set; }
     public bool IsOpen24Hours { get; set; }
+    public bool SupportsReservations { get; set; } = true;
+    public bool HasDelivery { get; set; }
+    public DateTime? LastLocationVerifiedAtUtc { get; set; }
     public bool IsActive { get; set; } = true;
 
     public Guid? PharmacyChainId { get; set; }

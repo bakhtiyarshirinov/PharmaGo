@@ -15,6 +15,8 @@ public class StockItem : BaseEntity
     public decimal PurchasePrice { get; set; }
     public decimal RetailPrice { get; set; }
     public int ReorderLevel { get; set; }
+    public bool IsReservable { get; set; } = true;
+    public DateTime? LastStockUpdatedAtUtc { get; set; }
     public bool IsActive { get; set; } = true;
 
     public int AvailableQuantity => Math.Max(0, Quantity - ReservedQuantity);

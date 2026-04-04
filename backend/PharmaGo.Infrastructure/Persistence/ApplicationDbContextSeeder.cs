@@ -43,7 +43,13 @@ public static class ApplicationDbContextSeeder
                 PhoneNumber = "+994501001122",
                 Latitude = "40.3777",
                 Longitude = "49.8920",
+                LocationLatitude = 40.377700m,
+                LocationLongitude = 49.892000m,
+                OpeningHoursJson = "{\"timeZone\":\"Asia/Baku\",\"weekly\":[{\"day\":\"Mon\",\"open\":\"00:00\",\"close\":\"23:59\"},{\"day\":\"Tue\",\"open\":\"00:00\",\"close\":\"23:59\"},{\"day\":\"Wed\",\"open\":\"00:00\",\"close\":\"23:59\"},{\"day\":\"Thu\",\"open\":\"00:00\",\"close\":\"23:59\"},{\"day\":\"Fri\",\"open\":\"00:00\",\"close\":\"23:59\"},{\"day\":\"Sat\",\"open\":\"00:00\",\"close\":\"23:59\"},{\"day\":\"Sun\",\"open\":\"00:00\",\"close\":\"23:59\"}]}",
                 IsOpen24Hours = true,
+                SupportsReservations = true,
+                HasDelivery = true,
+                LastLocationVerifiedAtUtc = DateTime.UtcNow,
                 PharmacyChain = chain
             };
 
@@ -56,7 +62,13 @@ public static class ApplicationDbContextSeeder
                 PhoneNumber = "+994501003344",
                 Latitude = "40.4093",
                 Longitude = "49.8671",
+                LocationLatitude = 40.409300m,
+                LocationLongitude = 49.867100m,
+                OpeningHoursJson = "{\"timeZone\":\"Asia/Baku\",\"weekly\":[{\"day\":\"Mon\",\"open\":\"09:00\",\"close\":\"22:00\"},{\"day\":\"Tue\",\"open\":\"09:00\",\"close\":\"22:00\"},{\"day\":\"Wed\",\"open\":\"09:00\",\"close\":\"22:00\"},{\"day\":\"Thu\",\"open\":\"09:00\",\"close\":\"22:00\"},{\"day\":\"Fri\",\"open\":\"09:00\",\"close\":\"22:00\"},{\"day\":\"Sat\",\"open\":\"10:00\",\"close\":\"20:00\"},{\"day\":\"Sun\",\"open\":\"10:00\",\"close\":\"18:00\"}]}",
                 IsOpen24Hours = false,
+                SupportsReservations = true,
+                HasDelivery = false,
+                LastLocationVerifiedAtUtc = DateTime.UtcNow,
                 PharmacyChain = chain
             };
 
@@ -123,7 +135,9 @@ public static class ApplicationDbContextSeeder
                     ReservedQuantity = 0,
                     PurchasePrice = 1.20m,
                     RetailPrice = 2.50m,
-                    ReorderLevel = 20
+                    ReorderLevel = 20,
+                    IsReservable = true,
+                    LastStockUpdatedAtUtc = DateTime.UtcNow
                 },
                 new StockItem
                 {
@@ -135,7 +149,9 @@ public static class ApplicationDbContextSeeder
                     ReservedQuantity = 0,
                     PurchasePrice = 1.80m,
                     RetailPrice = 3.40m,
-                    ReorderLevel = 15
+                    ReorderLevel = 15,
+                    IsReservable = true,
+                    LastStockUpdatedAtUtc = DateTime.UtcNow
                 },
                 new StockItem
                 {
@@ -147,7 +163,9 @@ public static class ApplicationDbContextSeeder
                     ReservedQuantity = 0,
                     PurchasePrice = 1.10m,
                     RetailPrice = 2.30m,
-                    ReorderLevel = 10
+                    ReorderLevel = 10,
+                    IsReservable = true,
+                    LastStockUpdatedAtUtc = DateTime.UtcNow
                 },
                 new StockItem
                 {
@@ -159,7 +177,9 @@ public static class ApplicationDbContextSeeder
                     ReservedQuantity = 0,
                     PurchasePrice = 3.50m,
                     RetailPrice = 6.80m,
-                    ReorderLevel = 8
+                    ReorderLevel = 8,
+                    IsReservable = true,
+                    LastStockUpdatedAtUtc = DateTime.UtcNow
                 }
             };
 

@@ -256,6 +256,12 @@ Endpoints:
   - backward-compatible generic transition endpoint
   - customer can cancel own active reservation
   - staff can move reservation through pharmacy workflow
+- `GET /api/notifications/preferences`
+  - authenticated
+  - returns effective notification settings for in-app and future Telegram delivery
+- `PUT /api/notifications/preferences`
+  - authenticated
+  - updates notification delivery preferences for reservation lifecycle events
 
 Important details:
 - validates requested quantities and reservation lifetime
@@ -271,6 +277,7 @@ Important details:
 - uses explicit audit actions such as `reservation.cancelled`, `reservation.completed` and `reservation.expired`
 - delegates stock release and completion rules to `IReservationStateService`
 - delegates transition permissions and allowed state changes to `IReservationTransitionPolicy`
+- creates in-app notification delivery logs for reservation lifecycle events and expiring-soon reminders
 - dashboard and medicine-search caches are invalidated on reservation writes and automatic expiration
 
 ## StocksController

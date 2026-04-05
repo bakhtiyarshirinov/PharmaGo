@@ -12,6 +12,8 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
     public DbSet<Depot> Depots => Set<Depot>();
     public DbSet<Medicine> Medicines => Set<Medicine>();
     public DbSet<MedicineCategory> MedicineCategories => Set<MedicineCategory>();
+    public DbSet<NotificationDeliveryLog> NotificationDeliveryLogs => Set<NotificationDeliveryLog>();
+    public DbSet<NotificationPreference> NotificationPreferences => Set<NotificationPreference>();
     public DbSet<Pharmacy> Pharmacies => Set<Pharmacy>();
     public DbSet<PharmacyChain> PharmacyChains => Set<PharmacyChain>();
     public DbSet<RefreshToken> RefreshTokens => Set<RefreshToken>();

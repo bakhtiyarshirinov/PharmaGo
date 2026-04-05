@@ -10,6 +10,8 @@ public interface IApplicationDbContext
     DbSet<Depot> Depots { get; }
     DbSet<Medicine> Medicines { get; }
     DbSet<MedicineCategory> MedicineCategories { get; }
+    DbSet<NotificationDeliveryLog> NotificationDeliveryLogs { get; }
+    DbSet<NotificationPreference> NotificationPreferences { get; }
     DbSet<Pharmacy> Pharmacies { get; }
     DbSet<PharmacyChain> PharmacyChains { get; }
     DbSet<RefreshToken> RefreshTokens { get; }

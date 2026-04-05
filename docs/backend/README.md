@@ -28,6 +28,7 @@ The backend solves four main business flows:
 - Swagger UI in development
 - SignalR hub for realtime reservation and stock events
 - background worker for auto-expiring reservations
+- background worker for reservation expiring-soon reminders
 - audit log storage for sensitive business actions
 - optimistic concurrency protection on reservation and stock write paths
 - health endpoint at `/health`
@@ -45,6 +46,7 @@ The backend solves four main business flows:
 - `PharmaciesController`: nearby pharmacy discovery, map pins, autocomplete, popular feed, pharmacy cards and pharmacy catalog browsing
 - `MePharmaciesController`: authenticated consumer pharmacy feeds for favorites and recent views
 - `ReservationsController`: create reservation, active/timeline lookup and explicit lifecycle commands
+- `NotificationsController`: authenticated notification preference endpoints for consumer delivery settings
 - `StocksController`: pharmacy stock CRUD, explicit inventory commands and operational stock alerts
 - `DashboardController`: summary metrics and recent reservations for staff dashboards
 - `AuditLogsController`: staff audit trail access
@@ -56,6 +58,7 @@ SignalR hub path:
 
 Published event names:
 
+- `notification.received`
 - `reservation.created`
 - `reservation.status.changed`
 - `stock.low`
@@ -85,6 +88,7 @@ Workflow rules:
 - `POST /api/reservations` supports optional `Idempotency-Key` header for retry-safe create
 - invalid lifecycle transitions now return `422 Unprocessable Entity` with problem details payload
 - background worker expires overdue reservations automatically
+- notification core writes delivery logs and sends in-app reservation events based on user preferences
 - stock is released on `Cancelled` and `Expired`
 - stock is deducted on `Completed`
 - reservation responses now expose lifecycle timestamps for create, confirm, ready, complete, cancel and expire moments

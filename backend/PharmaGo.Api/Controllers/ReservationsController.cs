@@ -27,6 +27,7 @@ public class ReservationsController(
     IAppCacheService cacheService,
     IAuditService auditService,
     ICurrentUserService currentUserService,
+    IReservationNotificationService reservationNotificationService,
     IReservationStateService reservationStateService,
     IReservationTransitionPolicy reservationTransitionPolicy,
     RealtimeNotificationService realtimeNotificationService) : ControllerBase
@@ -511,6 +512,14 @@ public class ReservationsController(
                 cancellationToken: cancellationToken);
 
             await realtimeNotificationService.NotifyReservationCreatedAsync(pharmacyId, response!, cancellationToken);
+            var createdReservation = await context.Reservations
+                .AsNoTracking()
+                .Include(x => x.Pharmacy)
+                .FirstAsync(x => x.Id == response.ReservationId, cancellationToken);
+            await reservationNotificationService.DispatchStatusNotificationAsync(
+                createdReservation,
+                ReservationStatus.Pending,
+                cancellationToken);
             await PublishLowStockNotificationsAsync(affectedStocks ?? [], cancellationToken);
 
             return CreatedAtAction(nameof(GetById), new { id = response!.ReservationId }, response);
@@ -800,6 +809,10 @@ public class ReservationsController(
             response.PharmacyId,
             response.CustomerId,
             response,
+            cancellationToken);
+        await reservationNotificationService.DispatchStatusNotificationAsync(
+            reservation!,
+            previousStatus,
             cancellationToken);
         await auditService.WriteAsync(
             action: ToAuditAction(nextStatus),

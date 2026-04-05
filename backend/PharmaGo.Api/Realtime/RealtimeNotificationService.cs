@@ -13,6 +13,12 @@ public class RealtimeNotificationService(IHubContext<NotificationHub> hubContext
             .SendAsync(NotificationEvents.ReservationCreated, payload, cancellationToken);
     }
 
+    public Task NotifyUserNotificationAsync(Guid userId, object payload, CancellationToken cancellationToken = default)
+    {
+        return hubContext.Clients.Group($"user:{userId}")
+            .SendAsync(NotificationEvents.NotificationReceived, payload, cancellationToken);
+    }
+
     public Task NotifyReservationStatusChangedAsync(Guid pharmacyId, Guid customerId, object payload, CancellationToken cancellationToken = default)
     {
         return hubContext.Clients.Groups($"pharmacy:{pharmacyId}", $"user:{customerId}", "role:Moderator")

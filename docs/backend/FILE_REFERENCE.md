@@ -23,6 +23,7 @@ This file documents the purpose of every backend source file currently in the re
 - `backend/PharmaGo.Api/Controllers/MePharmaciesController.cs`: authenticated consumer pharmacy feeds for favorites and recent views.
 - `backend/PharmaGo.Api/Controllers/UsersController.cs`: moderator-only user management endpoints with soft delete and restore.
 - `backend/PharmaGo.Api/Controllers/ReservationsController.cs`: reservation create, active/timeline lookup and explicit workflow transition endpoints.
+- `backend/PharmaGo.Api/Controllers/NotificationsController.cs`: authenticated notification preference endpoints for in-app and future Telegram delivery settings.
 - `backend/PharmaGo.Api/Controllers/StocksController.cs`: inventory management, explicit stock command and operational alert endpoints for staff.
 - `backend/PharmaGo.Api/Controllers/DashboardController.cs`: dashboard summary and recent reservation endpoints for staff UI.
 - `backend/PharmaGo.Api/Controllers/AuditLogsController.cs`: audit log query endpoint for staff and moderators.
@@ -30,11 +31,14 @@ This file documents the purpose of every backend source file currently in the re
 ### Background
 - `backend/PharmaGo.Api/Background/ReservationExpirationSettings.cs`: options class for reservation expiration worker polling interval.
 - `backend/PharmaGo.Api/Background/ReservationExpirationWorker.cs`: hosted service that expires overdue reservations, releases stock, bumps caches, writes audit logs and publishes realtime events.
+- `backend/PharmaGo.Api/Background/ReservationNotificationSettings.cs`: options for notification reminder polling and expiring-soon lead time.
+- `backend/PharmaGo.Api/Background/ReservationNotificationWorker.cs`: hosted service that dispatches reservation expiring-soon reminders.
 
 ### Realtime
 - `backend/PharmaGo.Api/Hubs/NotificationHub.cs`: authenticated SignalR hub that groups connections by user, role and pharmacy.
 - `backend/PharmaGo.Api/Realtime/NotificationEvents.cs`: centralized event name constants for realtime notifications.
 - `backend/PharmaGo.Api/Realtime/RealtimeNotificationService.cs`: abstraction over SignalR hub context for reservation and stock events.
+- `backend/PharmaGo.Api/Services/ReservationNotificationService.cs`: notification dispatcher that applies user preferences, emits in-app events and writes delivery logs.
 
 ## PharmaGo.Application
 
@@ -55,6 +59,8 @@ This file documents the purpose of every backend source file currently in the re
 - `backend/PharmaGo.Application/Abstractions/IPharmacyConsumerService.cs`: contract for consumer personalized pharmacy feeds, favorite actions and recent-view tracking.
 - `backend/PharmaGo.Application/Abstractions/IPharmacyDiscoveryService.cs`: contract for nearby-pharmacy discovery and filtering.
 - `backend/PharmaGo.Application/Abstractions/IRefreshTokenService.cs`: contract for issuing, loading and revoking refresh tokens.
+- `backend/PharmaGo.Application/Abstractions/INotificationPreferenceService.cs`: contract for loading and updating user notification preferences.
+- `backend/PharmaGo.Application/Abstractions/IReservationNotificationService.cs`: contract for dispatching reservation lifecycle notifications and expiring-soon reminders.
 - `backend/PharmaGo.Application/Abstractions/IReservationStateService.cs`: contract for releasing and completing reserved stock safely.
 
 ### Auth Contracts
@@ -68,6 +74,11 @@ This file documents the purpose of every backend source file currently in the re
 
 ### Common
 - `backend/PharmaGo.Application/Common/Contracts/PagedResponse.cs`: generic paged response wrapper with totals, pages and sorting metadata.
+
+### Notifications
+- `backend/PharmaGo.Application/Notifications/Contracts/NotificationMessagePayload.cs`: realtime in-app notification payload sent to authenticated users.
+- `backend/PharmaGo.Application/Notifications/Contracts/NotificationPreferencesResponse.cs`: DTO returned by notification preference endpoints.
+- `backend/PharmaGo.Application/Notifications/Contracts/UpdateNotificationPreferencesRequest.cs`: request contract for updating notification preferences.
 
 ### Medicines
 - `backend/PharmaGo.Application/Medicines/Queries/GetConsumerMedicineFeed/ConsumerMedicineFeedItemResponse.cs`: DTO for popular, favorite and recent consumer medicine feeds with personalization flags.

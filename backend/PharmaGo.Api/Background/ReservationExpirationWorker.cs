@@ -38,6 +38,7 @@ public class ReservationExpirationWorker(
 
         var context = scope.ServiceProvider.GetRequiredService<IApplicationDbContext>();
         var cacheService = scope.ServiceProvider.GetRequiredService<IAppCacheService>();
+        var reservationNotificationService = scope.ServiceProvider.GetRequiredService<IReservationNotificationService>();
         var reservationStateService = scope.ServiceProvider.GetRequiredService<IReservationStateService>();
         var auditService = scope.ServiceProvider.GetRequiredService<IAuditService>();
         var realtimeNotificationService = scope.ServiceProvider.GetRequiredService<RealtimeNotificationService>();
@@ -110,6 +111,10 @@ public class ReservationExpirationWorker(
                 reservation.PharmacyId,
                 reservation.CustomerId,
                 payload,
+                cancellationToken);
+            await reservationNotificationService.DispatchStatusNotificationAsync(
+                reservation,
+                ReservationStatus.Confirmed,
                 cancellationToken);
 
             await auditService.WriteAsync(

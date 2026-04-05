@@ -4,6 +4,8 @@ using Microsoft.OpenApi.Models;
 using PharmaGo.Api.Background;
 using PharmaGo.Api.Hubs;
 using PharmaGo.Api.Realtime;
+using PharmaGo.Api.Services;
+using PharmaGo.Application.Abstractions;
 using PharmaGo.Infrastructure;
 using PharmaGo.Infrastructure.Persistence;
 
@@ -15,9 +17,13 @@ builder.Services.AddProblemDetails();
 builder.Services.AddControllers();
 builder.Services.AddSignalR();
 builder.Services.AddScoped<RealtimeNotificationService>();
+builder.Services.AddScoped<IReservationNotificationService, ReservationNotificationService>();
 builder.Services.Configure<ReservationExpirationSettings>(
     builder.Configuration.GetSection(ReservationExpirationSettings.SectionName));
+builder.Services.Configure<ReservationNotificationSettings>(
+    builder.Configuration.GetSection(ReservationNotificationSettings.SectionName));
 builder.Services.AddHostedService<ReservationExpirationWorker>();
+builder.Services.AddHostedService<ReservationNotificationWorker>();
 builder.Services.AddHealthChecks()
     .AddDbContextCheck<ApplicationDbContext>();
 builder.Services.AddEndpointsApiExplorer();

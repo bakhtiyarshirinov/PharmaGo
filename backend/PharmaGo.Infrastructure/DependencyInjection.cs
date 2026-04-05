@@ -61,6 +61,7 @@ public static class DependencyInjection
         services.AddScoped<IMedicineSearchService, MedicineSearchService>();
         services.AddScoped<IPharmacyDiscoveryService, PharmacyDiscoveryService>();
         services.AddScoped<IMedicineAvailabilityService, MedicineAvailabilityService>();
+        services.AddScoped<INotificationPreferenceService, NotificationPreferenceService>();
         services.AddScoped<IPasswordHasher<AppUser>, PasswordHasher<AppUser>>();
         services.AddScoped<IReservationStateService, ReservationStateService>();
         services.AddScoped<IReservationTransitionPolicy, ReservationTransitionPolicy>();

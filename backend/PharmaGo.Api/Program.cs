@@ -9,6 +9,7 @@ using PharmaGo.Api.Controllers;
 using PharmaGo.Api.Hubs;
 using PharmaGo.Api.OpenApi;
 using PharmaGo.Api.Realtime;
+using PharmaGo.Api.RateLimiting;
 using PharmaGo.Api.Services;
 using PharmaGo.Application.Abstractions;
 using PharmaGo.Infrastructure;
@@ -20,6 +21,8 @@ const string FrontendCorsPolicy = "FrontendDev";
 builder.Services.AddInfrastructure(builder.Configuration);
 builder.Services.AddProblemDetails();
 builder.Services.AddControllers();
+builder.Services.Configure<RateLimitingSettings>(
+    builder.Configuration.GetSection(RateLimitingSettings.SectionName));
 builder.Services.AddApiVersioning(options =>
 {
     options.DefaultApiVersion = new ApiVersion(1, 0);
@@ -128,7 +131,9 @@ if (!app.Environment.IsDevelopment())
     app.UseHttpsRedirection();
 }
 
+app.UseRouting();
 app.UseAuthentication();
+app.UseMiddleware<SelectiveRateLimitingMiddleware>(app.Configuration.GetSection(RateLimitingSettings.SectionName).Get<RateLimitingSettings>() ?? new RateLimitingSettings());
 app.UseCors(FrontendCorsPolicy);
 app.UseAuthorization();
 app.MapControllers();

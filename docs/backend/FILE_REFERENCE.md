@@ -43,6 +43,10 @@ This file documents the purpose of every backend source file currently in the re
 - `backend/PharmaGo.Api/Realtime/RealtimeNotificationService.cs`: abstraction over SignalR hub context for reservation and stock events.
 - `backend/PharmaGo.Api/Services/ReservationNotificationService.cs`: notification dispatcher that applies user preferences, emits in-app events and writes delivery logs.
 
+### Rate Limiting
+- `backend/PharmaGo.Api/RateLimiting/RateLimitingPolicyNames.cs`: names for auth, search and reservation-create throttling policies.
+- `backend/PharmaGo.Api/RateLimiting/RateLimitingSettings.cs`: configurable fixed-window permit limits and windows.
+
 ## PharmaGo.Application
 
 ### Project

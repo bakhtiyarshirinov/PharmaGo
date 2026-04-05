@@ -212,6 +212,7 @@ Important details:
 - canonical API contract uses `/api/v1/...`
 - existing `/api/...` routes remain available as backward-compatible aliases
 - Swagger now publishes versioned documentation for `v1`
+- auth, public search and reservation-create endpoints are additionally protected by fixed-window rate limiting
 
 ## ReservationsController
 File: `backend/PharmaGo.Api/Controllers/ReservationsController.cs`

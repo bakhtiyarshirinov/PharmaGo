@@ -25,7 +25,13 @@ public class CustomWebApplicationFactory : WebApplicationFactory<Program>, IAsyn
             {
                 ["ConnectionStrings:DefaultConnection"] = TestConnectionString,
                 ["RefreshToken:ExpirationDays"] = "14",
-                ["ReservationExpiration:PollingIntervalSeconds"] = "3600"
+                ["ReservationExpiration:PollingIntervalSeconds"] = "3600",
+                ["RateLimiting:AuthPermitLimit"] = "500",
+                ["RateLimiting:AuthWindowSeconds"] = "60",
+                ["RateLimiting:SearchPermitLimit"] = "1000",
+                ["RateLimiting:SearchWindowSeconds"] = "60",
+                ["RateLimiting:ReservationCreatePermitLimit"] = "250",
+                ["RateLimiting:ReservationCreateWindowSeconds"] = "60"
             });
         });
 

@@ -21,7 +21,7 @@ This file documents the purpose of every backend source file currently in the re
 - `backend/PharmaGo.Api/Controllers/PharmaciesController.cs`: public nearby-pharmacy discovery endpoint with geo filters and paging.
 - `backend/PharmaGo.Api/Controllers/UsersController.cs`: moderator-only user management endpoints with soft delete and restore.
 - `backend/PharmaGo.Api/Controllers/ReservationsController.cs`: reservation create, active/timeline lookup and explicit workflow transition endpoints.
-- `backend/PharmaGo.Api/Controllers/StocksController.cs`: inventory management and low-stock alert endpoints for staff.
+- `backend/PharmaGo.Api/Controllers/StocksController.cs`: inventory management, explicit stock command and operational alert endpoints for staff.
 - `backend/PharmaGo.Api/Controllers/DashboardController.cs`: dashboard summary and recent reservation endpoints for staff UI.
 - `backend/PharmaGo.Api/Controllers/AuditLogsController.cs`: audit log query endpoint for staff and moderators.
 
@@ -94,9 +94,14 @@ This file documents the purpose of every backend source file currently in the re
 - `backend/PharmaGo.Application/Reservations/Queries/GetReservationTimeline/ReservationTimelineEventResponse.cs`: audit-backed reservation timeline event DTO with actor and resolved status.
 
 ### Stocks
+- `backend/PharmaGo.Application/Stocks/Commands/AdjustStockQuantity/AdjustStockQuantityRequest.cs`: signed quantity-correction payload for stock adjustments.
 - `backend/PharmaGo.Application/Stocks/Commands/CreateStockItem/CreateStockItemRequest.cs`: stock creation payload with validation attributes.
+- `backend/PharmaGo.Application/Stocks/Commands/ReceiveStock/ReceiveStockRequest.cs`: stock receiving payload with quantity and optional pricing updates.
 - `backend/PharmaGo.Application/Stocks/Commands/UpdateStockItem/UpdateStockItemRequest.cs`: stock update payload with validation attributes.
+- `backend/PharmaGo.Application/Stocks/Commands/WriteOffStock/WriteOffStockRequest.cs`: stock write-off payload with required quantity and optional reason.
+- `backend/PharmaGo.Application/Stocks/Queries/GetExpiringStockAlerts/ExpiringStockAlertResponse.cs`: DTO for near-expiry stock batch alerts.
 - `backend/PharmaGo.Application/Stocks/Queries/GetLowStockAlerts/LowStockAlertResponse.cs`: DTO used by low-stock APIs and realtime events.
+- `backend/PharmaGo.Application/Stocks/Queries/GetOutOfStockAlerts/OutOfStockAlertResponse.cs`: medicine-level DTO for out-of-stock alerts aggregated by pharmacy.
 - `backend/PharmaGo.Application/Stocks/Queries/GetStocks/StockItemResponse.cs`: inventory row DTO returned from stock endpoints.
 
 ### Dashboard
@@ -223,6 +228,7 @@ This file documents the purpose of every backend source file currently in the re
 - `backend/PharmaGo.IntegrationTests/Pharmacies/PharmacyDiscoveryTests.cs`: covers nearby-pharmacy discovery, open-now filtering and invalid geo input handling.
 - `backend/PharmaGo.IntegrationTests/Pharmacies/PharmacySuggestionsTests.cs`: covers pharmacy autocomplete and lightweight nearby-map pin endpoints.
 - `backend/PharmaGo.IntegrationTests/Reservations/ReservationFlowTests.cs`: covers authenticated reservation creation, explicit lifecycle commands, active/timeline reads and concurrent reservation hardening.
+- `backend/PharmaGo.IntegrationTests/Stocks/StockManagementTests.cs`: covers explicit stock adjust/receive/writeoff commands and operational stock alerts.
 - `backend/PharmaGo.IntegrationTests/Users/UserManagementTests.cs`: covers moderator account creation, soft delete and restore scenarios.
 
 ## Runtime Tooling

@@ -3,9 +3,14 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using PharmaGo.Api.Realtime;
 using PharmaGo.Application.Abstractions;
+using PharmaGo.Application.Stocks.Commands.AdjustStockQuantity;
 using PharmaGo.Application.Stocks.Commands.CreateStockItem;
+using PharmaGo.Application.Stocks.Commands.ReceiveStock;
 using PharmaGo.Application.Stocks.Commands.UpdateStockItem;
+using PharmaGo.Application.Stocks.Commands.WriteOffStock;
+using PharmaGo.Application.Stocks.Queries.GetExpiringStockAlerts;
 using PharmaGo.Application.Stocks.Queries.GetLowStockAlerts;
+using PharmaGo.Application.Stocks.Queries.GetOutOfStockAlerts;
 using PharmaGo.Application.Stocks.Queries.GetRestockSuggestions;
 using PharmaGo.Application.Stocks.Queries.GetStocks;
 using PharmaGo.Domain.Models;
@@ -31,25 +36,13 @@ public class StocksController(
         [FromQuery] Guid? pharmacyId,
         CancellationToken cancellationToken)
     {
-        if (pharmacyId.HasValue)
+        var scopeResult = await ResolveEffectivePharmacyScopeAsync(pharmacyId, cancellationToken);
+        if (scopeResult.Error is not null)
         {
-            var accessResult = await EnsurePharmacyAccessAsync(pharmacyId.Value, cancellationToken);
-            if (accessResult is not null)
-            {
-                return accessResult;
-            }
+            return scopeResult.Error;
         }
 
-        var effectivePharmacyId = pharmacyId;
-
-        if (!effectivePharmacyId.HasValue && User.IsInRole(RoleNames.Pharmacist) && !User.IsInRole(RoleNames.Moderator))
-        {
-            var currentUser = await context.Users
-                .AsNoTracking()
-                .FirstOrDefaultAsync(x => x.Id == currentUserService.UserId, cancellationToken);
-
-            effectivePharmacyId = currentUser?.PharmacyId;
-        }
+        var effectivePharmacyId = scopeResult.PharmacyId;
 
         var lowStockItems = await context.StockItems
             .AsNoTracking()
@@ -80,6 +73,133 @@ public class StocksController(
         return Ok(lowStockItems);
     }
 
+    [HttpGet("alerts/out-of-stock")]
+    [ProducesResponseType(typeof(IReadOnlyCollection<OutOfStockAlertResponse>), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    public async Task<ActionResult<IReadOnlyCollection<OutOfStockAlertResponse>>> GetOutOfStockAlerts(
+        [FromQuery] Guid? pharmacyId,
+        CancellationToken cancellationToken)
+    {
+        var scopeResult = await ResolveEffectivePharmacyScopeAsync(pharmacyId, cancellationToken);
+        if (scopeResult.Error is not null)
+        {
+            return scopeResult.Error;
+        }
+
+        var effectivePharmacyId = scopeResult.PharmacyId;
+        var today = DateOnly.FromDateTime(DateTime.UtcNow);
+
+        var outOfStockItems = await context.StockItems
+            .AsNoTracking()
+            .Where(x => x.IsActive &&
+                x.ExpirationDate >= today &&
+                (!effectivePharmacyId.HasValue || x.PharmacyId == effectivePharmacyId.Value))
+            .GroupBy(x => new
+            {
+                x.PharmacyId,
+                PharmacyName = x.Pharmacy!.Name,
+                x.MedicineId,
+                MedicineName = x.Medicine!.BrandName,
+                x.Medicine.GenericName
+            })
+            .Select(group => new OutOfStockAlertResponse
+            {
+                PharmacyId = group.Key.PharmacyId,
+                PharmacyName = group.Key.PharmacyName,
+                MedicineId = group.Key.MedicineId,
+                MedicineName = group.Key.MedicineName,
+                GenericName = group.Key.GenericName,
+                BatchCount = group.Count(),
+                TotalQuantity = group.Sum(x => x.Quantity),
+                TotalReservedQuantity = group.Sum(x => x.ReservedQuantity),
+                TotalAvailableQuantity = group.Sum(x => x.Quantity - x.ReservedQuantity),
+                ReorderLevel = group.Max(x => x.ReorderLevel),
+                NearestExpirationDate = group.Min(x => (DateOnly?)x.ExpirationDate),
+                LastStockUpdatedAtUtc = group.Max(x => x.LastStockUpdatedAtUtc)
+            })
+            .Where(x => x.TotalAvailableQuantity <= 0)
+            .OrderBy(x => x.PharmacyName)
+            .ThenBy(x => x.MedicineName)
+            .ToListAsync(cancellationToken);
+
+        return Ok(outOfStockItems);
+    }
+
+    [HttpGet("alerts/expiring")]
+    [ProducesResponseType(typeof(IReadOnlyCollection<ExpiringStockAlertResponse>), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    public async Task<ActionResult<IReadOnlyCollection<ExpiringStockAlertResponse>>> GetExpiringAlerts(
+        [FromQuery] Guid? pharmacyId,
+        [FromQuery] int days = 30,
+        CancellationToken cancellationToken = default)
+    {
+        if (days <= 0 || days > 180)
+        {
+            return BadRequest("Days must be between 1 and 180.");
+        }
+
+        var scopeResult = await ResolveEffectivePharmacyScopeAsync(pharmacyId, cancellationToken);
+        if (scopeResult.Error is not null)
+        {
+            return scopeResult.Error;
+        }
+
+        var effectivePharmacyId = scopeResult.PharmacyId;
+        var today = DateOnly.FromDateTime(DateTime.UtcNow);
+        var maxDate = today.AddDays(days);
+
+        var expiringRows = await context.StockItems
+            .AsNoTracking()
+            .Where(x => x.IsActive &&
+                x.Quantity > 0 &&
+                x.ExpirationDate >= today &&
+                x.ExpirationDate <= maxDate &&
+                (!effectivePharmacyId.HasValue || x.PharmacyId == effectivePharmacyId.Value))
+            .OrderBy(x => x.ExpirationDate)
+            .ThenBy(x => x.Pharmacy!.Name)
+            .ThenBy(x => x.Medicine!.BrandName)
+            .Select(x => new
+            {
+                x.Id,
+                x.PharmacyId,
+                PharmacyName = x.Pharmacy!.Name,
+                x.MedicineId,
+                MedicineName = x.Medicine!.BrandName,
+                x.Medicine.GenericName,
+                x.BatchNumber,
+                x.ExpirationDate,
+                x.Quantity,
+                x.ReservedQuantity,
+                AvailableQuantity = x.Quantity - x.ReservedQuantity,
+                x.RetailPrice,
+                x.LastStockUpdatedAtUtc
+            })
+            .ToListAsync(cancellationToken);
+
+        var expiringItems = expiringRows
+            .Select(x => new ExpiringStockAlertResponse
+            {
+                StockItemId = x.Id,
+                PharmacyId = x.PharmacyId,
+                PharmacyName = x.PharmacyName,
+                MedicineId = x.MedicineId,
+                MedicineName = x.MedicineName,
+                GenericName = x.GenericName,
+                BatchNumber = x.BatchNumber,
+                ExpirationDate = x.ExpirationDate,
+                DaysUntilExpiration = x.ExpirationDate.DayNumber - today.DayNumber,
+                Quantity = x.Quantity,
+                ReservedQuantity = x.ReservedQuantity,
+                AvailableQuantity = x.AvailableQuantity,
+                RetailPrice = x.RetailPrice,
+                LastStockUpdatedAtUtc = x.LastStockUpdatedAtUtc
+            })
+            .ToList();
+
+        return Ok(expiringItems);
+    }
+
     [HttpGet("alerts/restock-suggestions")]
     [ProducesResponseType(typeof(IReadOnlyCollection<RestockSuggestionResponse>), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status403Forbidden)]
@@ -87,25 +207,13 @@ public class StocksController(
         [FromQuery] Guid? pharmacyId,
         CancellationToken cancellationToken)
     {
-        if (pharmacyId.HasValue)
+        var scopeResult = await ResolveEffectivePharmacyScopeAsync(pharmacyId, cancellationToken);
+        if (scopeResult.Error is not null)
         {
-            var accessResult = await EnsurePharmacyAccessAsync(pharmacyId.Value, cancellationToken);
-            if (accessResult is not null)
-            {
-                return accessResult;
-            }
+            return scopeResult.Error;
         }
 
-        var effectivePharmacyId = pharmacyId;
-
-        if (!effectivePharmacyId.HasValue && User.IsInRole(RoleNames.Pharmacist) && !User.IsInRole(RoleNames.Moderator))
-        {
-            var currentUser = await context.Users
-                .AsNoTracking()
-                .FirstOrDefaultAsync(x => x.Id == currentUserService.UserId, cancellationToken);
-
-            effectivePharmacyId = currentUser?.PharmacyId;
-        }
+        var effectivePharmacyId = scopeResult.PharmacyId;
 
         var lowStockItems = await context.StockItems
             .AsNoTracking()
@@ -237,8 +345,10 @@ public class StocksController(
                 PurchasePrice = x.PurchasePrice,
                 RetailPrice = x.RetailPrice,
                 ReorderLevel = x.ReorderLevel,
+                IsReservable = x.IsReservable,
                 IsLowStock = (x.Quantity - x.ReservedQuantity) <= x.ReorderLevel,
-                IsActive = x.IsActive
+                IsActive = x.IsActive,
+                LastStockUpdatedAtUtc = x.LastStockUpdatedAtUtc
             })
             .ToListAsync(cancellationToken);
 
@@ -317,25 +427,10 @@ public class StocksController(
         await cacheService.BumpScopeVersionAsync(CacheScopes.MedicinesSearch, cancellationToken);
         await cacheService.BumpScopeVersionAsync(CacheScopes.Dashboard, cancellationToken);
 
-        var response = new StockItemResponse
-        {
-            Id = stockItem.Id,
-            PharmacyId = stockItem.PharmacyId,
-            PharmacyName = pharmacy.Name,
-            MedicineId = stockItem.MedicineId,
-            MedicineName = medicine.BrandName,
-            GenericName = medicine.GenericName,
-            BatchNumber = stockItem.BatchNumber,
-            ExpirationDate = stockItem.ExpirationDate,
-            Quantity = stockItem.Quantity,
-            ReservedQuantity = stockItem.ReservedQuantity,
-            AvailableQuantity = stockItem.AvailableQuantity,
-            PurchasePrice = stockItem.PurchasePrice,
-            RetailPrice = stockItem.RetailPrice,
-            ReorderLevel = stockItem.ReorderLevel,
-            IsLowStock = stockItem.IsLowStock,
-            IsActive = stockItem.IsActive
-        };
+        stockItem.Pharmacy = pharmacy;
+        stockItem.Medicine = medicine;
+
+        var response = MapStockItemResponse(stockItem);
 
         await PublishStockAlertIfNeededAsync(response, cancellationToken);
         await auditService.WriteAsync(
@@ -357,6 +452,181 @@ public class StocksController(
             cancellationToken: cancellationToken);
 
         return CreatedAtAction(nameof(GetByPharmacy), new { pharmacyId = stockItem.PharmacyId }, response);
+    }
+
+    [HttpPost("{id:guid}/adjust")]
+    [ProducesResponseType(typeof(StockItemResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<ActionResult<StockItemResponse>> Adjust(
+        Guid id,
+        [FromBody] AdjustStockQuantityRequest request,
+        CancellationToken cancellationToken)
+    {
+        if (request.QuantityDelta == 0)
+        {
+            return BadRequest("QuantityDelta must not be zero.");
+        }
+
+        var stockItem = await LoadStockItemAsync(id, cancellationToken);
+        if (stockItem is null)
+        {
+            return NotFound();
+        }
+
+        var accessResult = await EnsurePharmacyAccessAsync(stockItem.PharmacyId, cancellationToken);
+        if (accessResult is not null)
+        {
+            return accessResult;
+        }
+
+        var updatedQuantity = stockItem.Quantity + request.QuantityDelta;
+        if (updatedQuantity < 0)
+        {
+            return BadRequest("Quantity cannot become negative.");
+        }
+
+        if (updatedQuantity < stockItem.ReservedQuantity)
+        {
+            return BadRequest("Adjusted quantity cannot be lower than the currently reserved quantity.");
+        }
+
+        var wasLowStock = stockItem.IsLowStock;
+        stockItem.Quantity = updatedQuantity;
+
+        return await SaveStockMutationAsync(
+            stockItem,
+            wasLowStock,
+            "stock.adjusted",
+            $"Stock item {stockItem.BatchNumber} adjusted by {request.QuantityDelta}.",
+            new
+            {
+                stockItem.Id,
+                Delta = request.QuantityDelta,
+                PreviousQuantity = stockItem.Quantity - request.QuantityDelta,
+                NewQuantity = stockItem.Quantity,
+                Reason = NormalizeReason(request.Reason)
+            },
+            cancellationToken);
+    }
+
+    [HttpPost("{id:guid}/receive")]
+    [ProducesResponseType(typeof(StockItemResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<ActionResult<StockItemResponse>> Receive(
+        Guid id,
+        [FromBody] ReceiveStockRequest request,
+        CancellationToken cancellationToken)
+    {
+        if (request.QuantityReceived <= 0)
+        {
+            return BadRequest("QuantityReceived must be greater than zero.");
+        }
+
+        var stockItem = await LoadStockItemAsync(id, cancellationToken);
+        if (stockItem is null)
+        {
+            return NotFound();
+        }
+
+        var accessResult = await EnsurePharmacyAccessAsync(stockItem.PharmacyId, cancellationToken);
+        if (accessResult is not null)
+        {
+            return accessResult;
+        }
+
+        var wasLowStock = stockItem.IsLowStock;
+        var previousQuantity = stockItem.Quantity;
+
+        stockItem.Quantity += request.QuantityReceived;
+
+        if (request.PurchasePrice.HasValue)
+        {
+            stockItem.PurchasePrice = request.PurchasePrice.Value;
+        }
+
+        if (request.RetailPrice.HasValue)
+        {
+            stockItem.RetailPrice = request.RetailPrice.Value;
+        }
+
+        if (request.ReorderLevel.HasValue)
+        {
+            stockItem.ReorderLevel = request.ReorderLevel.Value;
+        }
+
+        return await SaveStockMutationAsync(
+            stockItem,
+            wasLowStock,
+            "stock.received",
+            $"Stock item {stockItem.BatchNumber} received {request.QuantityReceived} units.",
+            new
+            {
+                stockItem.Id,
+                QuantityReceived = request.QuantityReceived,
+                PreviousQuantity = previousQuantity,
+                NewQuantity = stockItem.Quantity,
+                PurchasePrice = stockItem.PurchasePrice,
+                RetailPrice = stockItem.RetailPrice,
+                ReorderLevel = stockItem.ReorderLevel,
+                Reason = NormalizeReason(request.Reason)
+            },
+            cancellationToken);
+    }
+
+    [HttpPost("{id:guid}/writeoff")]
+    [ProducesResponseType(typeof(StockItemResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<ActionResult<StockItemResponse>> WriteOff(
+        Guid id,
+        [FromBody] WriteOffStockRequest request,
+        CancellationToken cancellationToken)
+    {
+        if (request.Quantity <= 0)
+        {
+            return BadRequest("Quantity must be greater than zero.");
+        }
+
+        var stockItem = await LoadStockItemAsync(id, cancellationToken);
+        if (stockItem is null)
+        {
+            return NotFound();
+        }
+
+        var accessResult = await EnsurePharmacyAccessAsync(stockItem.PharmacyId, cancellationToken);
+        if (accessResult is not null)
+        {
+            return accessResult;
+        }
+
+        if (request.Quantity > stockItem.AvailableQuantity)
+        {
+            return BadRequest("Write-off quantity cannot exceed currently available stock.");
+        }
+
+        var wasLowStock = stockItem.IsLowStock;
+        var previousQuantity = stockItem.Quantity;
+        stockItem.Quantity -= request.Quantity;
+
+        return await SaveStockMutationAsync(
+            stockItem,
+            wasLowStock,
+            "stock.written_off",
+            $"Stock item {stockItem.BatchNumber} write-off recorded for {request.Quantity} units.",
+            new
+            {
+                stockItem.Id,
+                QuantityWrittenOff = request.Quantity,
+                PreviousQuantity = previousQuantity,
+                NewQuantity = stockItem.Quantity,
+                Reason = NormalizeReason(request.Reason)
+            },
+            cancellationToken);
     }
 
     [HttpPut("{id:guid}")]
@@ -424,25 +694,7 @@ public class StocksController(
         await cacheService.BumpScopeVersionAsync(CacheScopes.MedicinesSearch, cancellationToken);
         await cacheService.BumpScopeVersionAsync(CacheScopes.Dashboard, cancellationToken);
 
-        var response = new StockItemResponse
-        {
-            Id = stockItem.Id,
-            PharmacyId = stockItem.PharmacyId,
-            PharmacyName = stockItem.Pharmacy!.Name,
-            MedicineId = stockItem.MedicineId,
-            MedicineName = stockItem.Medicine!.BrandName,
-            GenericName = stockItem.Medicine.GenericName,
-            BatchNumber = stockItem.BatchNumber,
-            ExpirationDate = stockItem.ExpirationDate,
-            Quantity = stockItem.Quantity,
-            ReservedQuantity = stockItem.ReservedQuantity,
-            AvailableQuantity = stockItem.AvailableQuantity,
-            PurchasePrice = stockItem.PurchasePrice,
-            RetailPrice = stockItem.RetailPrice,
-            ReorderLevel = stockItem.ReorderLevel,
-            IsLowStock = stockItem.IsLowStock,
-            IsActive = stockItem.IsActive
-        };
+        var response = MapStockItemResponse(stockItem);
 
         await PublishStockTransitionAsync(response, wasLowStock, cancellationToken);
         await auditService.WriteAsync(
@@ -464,6 +716,14 @@ public class StocksController(
             cancellationToken: cancellationToken);
 
         return Ok(response);
+    }
+
+    private async Task<StockItem?> LoadStockItemAsync(Guid id, CancellationToken cancellationToken)
+    {
+        return await context.StockItems
+            .Include(x => x.Medicine)
+            .Include(x => x.Pharmacy)
+            .FirstOrDefaultAsync(x => x.Id == id, cancellationToken);
     }
 
     private async Task<ActionResult?> EnsurePharmacyAccessAsync(Guid pharmacyId, CancellationToken cancellationToken)
@@ -488,6 +748,33 @@ public class StocksController(
         }
 
         return null;
+    }
+
+    private async Task<(Guid? PharmacyId, ActionResult? Error)> ResolveEffectivePharmacyScopeAsync(
+        Guid? pharmacyId,
+        CancellationToken cancellationToken)
+    {
+        if (pharmacyId.HasValue)
+        {
+            var accessResult = await EnsurePharmacyAccessAsync(pharmacyId.Value, cancellationToken);
+            if (accessResult is not null)
+            {
+                return (null, accessResult);
+            }
+        }
+
+        var effectivePharmacyId = pharmacyId;
+
+        if (!effectivePharmacyId.HasValue && User.IsInRole(RoleNames.Pharmacist) && !User.IsInRole(RoleNames.Moderator))
+        {
+            var currentUser = await context.Users
+                .AsNoTracking()
+                .FirstOrDefaultAsync(x => x.Id == currentUserService.UserId, cancellationToken);
+
+            effectivePharmacyId = currentUser?.PharmacyId;
+        }
+
+        return (effectivePharmacyId, null);
     }
 
     private static string? ValidateStockRequest(
@@ -518,6 +805,72 @@ public class StocksController(
         }
 
         return null;
+    }
+
+    private async Task<ActionResult<StockItemResponse>> SaveStockMutationAsync(
+        StockItem stockItem,
+        bool wasLowStock,
+        string auditAction,
+        string description,
+        object metadata,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            await context.SaveChangesAsync(cancellationToken);
+        }
+        catch (DbUpdateConcurrencyException)
+        {
+            return Conflict("Stock item changed while updating inventory. Please refresh and try again.");
+        }
+
+        await cacheService.BumpScopeVersionAsync(CacheScopes.MedicinesSearch, cancellationToken);
+        await cacheService.BumpScopeVersionAsync(CacheScopes.Dashboard, cancellationToken);
+
+        var response = MapStockItemResponse(stockItem);
+
+        await PublishStockTransitionAsync(response, wasLowStock, cancellationToken);
+        await auditService.WriteAsync(
+            action: auditAction,
+            entityName: "StockItem",
+            entityId: stockItem.Id.ToString(),
+            userId: currentUserService.UserId,
+            pharmacyId: stockItem.PharmacyId,
+            description: description,
+            metadata: metadata,
+            cancellationToken: cancellationToken);
+
+        return Ok(response);
+    }
+
+    private static string? NormalizeReason(string? reason)
+    {
+        return string.IsNullOrWhiteSpace(reason) ? null : reason.Trim();
+    }
+
+    private static StockItemResponse MapStockItemResponse(StockItem stockItem)
+    {
+        return new StockItemResponse
+        {
+            Id = stockItem.Id,
+            PharmacyId = stockItem.PharmacyId,
+            PharmacyName = stockItem.Pharmacy?.Name ?? string.Empty,
+            MedicineId = stockItem.MedicineId,
+            MedicineName = stockItem.Medicine?.BrandName ?? string.Empty,
+            GenericName = stockItem.Medicine?.GenericName ?? string.Empty,
+            BatchNumber = stockItem.BatchNumber,
+            ExpirationDate = stockItem.ExpirationDate,
+            Quantity = stockItem.Quantity,
+            ReservedQuantity = stockItem.ReservedQuantity,
+            AvailableQuantity = stockItem.AvailableQuantity,
+            PurchasePrice = stockItem.PurchasePrice,
+            RetailPrice = stockItem.RetailPrice,
+            ReorderLevel = stockItem.ReorderLevel,
+            IsReservable = stockItem.IsReservable,
+            IsLowStock = stockItem.IsLowStock,
+            IsActive = stockItem.IsActive,
+            LastStockUpdatedAtUtc = stockItem.LastStockUpdatedAtUtc
+        };
     }
 
     private async Task PublishStockAlertIfNeededAsync(StockItemResponse stockItem, CancellationToken cancellationToken)

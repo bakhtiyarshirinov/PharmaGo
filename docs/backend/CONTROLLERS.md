@@ -213,6 +213,12 @@ Endpoints:
 - `GET /api/stocks/alerts/low-stock`
   - pharmacist or moderator
   - returns low-stock items in permitted pharmacy scope
+- `GET /api/stocks/alerts/out-of-stock`
+  - pharmacist or moderator
+  - returns medicine-level out-of-stock alerts aggregated within pharmacy scope
+- `GET /api/stocks/alerts/expiring`
+  - pharmacist or moderator
+  - returns batches expiring within the requested `days` window
 - `GET /api/stocks/alerts/restock-suggestions`
   - pharmacist or moderator
   - returns supplier-backed restock suggestions for low-stock items
@@ -223,6 +229,15 @@ Endpoints:
 - `POST /api/stocks`
   - pharmacist or moderator
   - creates a new stock batch
+- `POST /api/stocks/{id}/adjust`
+  - pharmacist or moderator
+  - applies signed quantity correction to an existing stock batch
+- `POST /api/stocks/{id}/receive`
+  - pharmacist or moderator
+  - increases quantity on an existing batch and can refresh pricing or reorder level
+- `POST /api/stocks/{id}/writeoff`
+  - pharmacist or moderator
+  - decreases only currently available stock and records the write-off reason
 - `PUT /api/stocks/{id}`
   - pharmacist or moderator
   - updates batch, quantity, pricing, reorder level and active state
@@ -230,13 +245,17 @@ Endpoints:
 Important details:
 - pharmacists are restricted to their own pharmacy
 - moderators can work across all pharmacies
+- explicit inventory commands write separate audit actions for adjustment, receiving and write-off
+- write-off cannot exceed currently available non-reserved stock
+- out-of-stock alerts are aggregated per pharmacy and medicine across active non-expired batches
+- expiring alerts support a bounded `days` query window from 1 to 180
 - prevents duplicate `(pharmacy, medicine, batch)` records
 - prevents reducing quantity below already reserved amount
 - returns `409 Conflict` when the stock row changed during an update
 - picks the cheapest available supplier option per medicine
 - respects supplier minimum order quantity and supplier availability
 - emits `stock.low` and `stock.restored` SignalR events
-- writes audit records for create and update
+- writes audit records for create, update and explicit stock command actions
 - dashboard and medicine-search caches are invalidated on stock writes
 
 ## DashboardController

@@ -43,7 +43,7 @@ The backend solves four main business flows:
 - `MedicinesController`: medicine catalog search, autocomplete, medicine cards and pharmacy availability
 - `PharmaciesController`: nearby pharmacy discovery, map pins, autocomplete, pharmacy cards and pharmacy catalog browsing
 - `ReservationsController`: create reservation, active/timeline lookup and explicit lifecycle commands
-- `StocksController`: pharmacy stock CRUD, low-stock alerts and supplier restock suggestions
+- `StocksController`: pharmacy stock CRUD, explicit inventory commands and operational stock alerts
 - `DashboardController`: summary metrics and recent reservations for staff dashboards
 - `AuditLogsController`: staff audit trail access
 
@@ -92,6 +92,8 @@ Workflow rules:
 - global exception handling is enabled through ASP.NET Core `ProblemDetails`
 - hot read endpoints use distributed cache versioning for safe invalidation
 - if `Redis:ConnectionString` is empty, the app falls back to in-memory distributed cache
+- inventory staff flows support explicit `adjust`, `receive` and `writeoff` commands in addition to the generic stock update endpoint
+- stock alerts cover `low-stock`, `restock-suggestions`, `out-of-stock` and `expiring`
 
 Read these next:
 

@@ -1,10 +1,13 @@
+using Asp.Versioning;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.OpenApi.Models;
+using PharmaGo.Api.Auth;
 using PharmaGo.Api.Background;
 using PharmaGo.Api.Controllers;
 using PharmaGo.Api.Hubs;
+using PharmaGo.Api.OpenApi;
 using PharmaGo.Api.Realtime;
 using PharmaGo.Api.Services;
 using PharmaGo.Application.Abstractions;
@@ -17,6 +20,17 @@ const string FrontendCorsPolicy = "FrontendDev";
 builder.Services.AddInfrastructure(builder.Configuration);
 builder.Services.AddProblemDetails();
 builder.Services.AddControllers();
+builder.Services.AddApiVersioning(options =>
+{
+    options.DefaultApiVersion = new ApiVersion(1, 0);
+    options.AssumeDefaultVersionWhenUnspecified = true;
+    options.ReportApiVersions = true;
+    options.ApiVersionReader = ApiVersionReader.Combine(new UrlSegmentApiVersionReader());
+}).AddApiExplorer(options =>
+{
+    options.GroupNameFormat = "'v'V";
+    options.SubstituteApiVersionInUrl = true;
+});
 builder.Services.Configure<ApiBehaviorOptions>(options =>
 {
     options.InvalidModelStateResponseFactory = context =>
@@ -36,6 +50,7 @@ builder.Services.Configure<ApiBehaviorOptions>(options =>
     };
 });
 builder.Services.AddSignalR();
+builder.Services.AddSingleton<Microsoft.AspNetCore.Authorization.IAuthorizationMiddlewareResultHandler, ApiAuthorizationMiddlewareResultHandler>();
 builder.Services.AddScoped<RealtimeNotificationService>();
 builder.Services.AddScoped<IReservationNotificationService, ReservationNotificationService>();
 builder.Services.Configure<ReservationExpirationSettings>(
@@ -63,12 +78,6 @@ builder.Services.AddCors(options =>
 });
 builder.Services.AddSwaggerGen(options =>
 {
-    options.SwaggerDoc("v1", new OpenApiInfo
-    {
-        Title = "PharmaGo API",
-        Version = "v1"
-    });
-
     var jwtSecurityScheme = new OpenApiSecurityScheme
     {
         Name = "Authorization",
@@ -90,6 +99,7 @@ builder.Services.AddSwaggerGen(options =>
         [jwtSecurityScheme] = Array.Empty<string>()
     });
 });
+builder.Services.ConfigureOptions<ConfigureSwaggerOptions>();
 
 var app = builder.Build();
 
@@ -103,7 +113,14 @@ app.UseExceptionHandler();
 if (app.Environment.IsDevelopment())
 {
     app.UseSwagger();
-    app.UseSwaggerUI();
+    app.UseSwaggerUI(options =>
+    {
+        var provider = app.Services.GetRequiredService<Asp.Versioning.ApiExplorer.IApiVersionDescriptionProvider>();
+        foreach (var description in provider.ApiVersionDescriptions)
+        {
+            options.SwaggerEndpoint($"/swagger/{description.GroupName}/swagger.json", $"PharmaGo API {description.GroupName.ToUpperInvariant()}");
+        }
+    });
 }
 
 if (!app.Environment.IsDevelopment())

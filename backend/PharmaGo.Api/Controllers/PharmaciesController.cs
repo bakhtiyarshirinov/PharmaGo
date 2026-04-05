@@ -1,3 +1,4 @@
+using Asp.Versioning;
 using Microsoft.AspNetCore.Mvc;
 using PharmaGo.Application.Abstractions;
 using PharmaGo.Application.Common.Contracts;
@@ -11,6 +12,8 @@ using PharmaGo.Application.Pharmacies.Queries.SuggestPharmacies;
 namespace PharmaGo.Api.Controllers;
 
 [ApiController]
+[ApiVersion("1.0")]
+[Route("api/v{version:apiVersion}/[controller]")]
 [Route("api/[controller]")]
 public class PharmaciesController(
     IPharmacyDiscoveryService pharmacyDiscoveryService,

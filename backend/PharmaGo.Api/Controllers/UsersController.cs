@@ -1,3 +1,4 @@
+using Asp.Versioning;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
@@ -13,6 +14,8 @@ using PharmaGo.Infrastructure.Auth;
 namespace PharmaGo.Api.Controllers;
 
 [ApiController]
+[ApiVersion("1.0")]
+[Route("api/v{version:apiVersion}/[controller]")]
 [Route("api/[controller]")]
 [Authorize(Policy = PolicyNames.ManageUsers)]
 public class UsersController(

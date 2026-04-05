@@ -1,3 +1,4 @@
+using Asp.Versioning;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using PharmaGo.Application.Abstractions;
@@ -6,6 +7,8 @@ using PharmaGo.Application.Pharmacies.Queries.GetConsumerPharmacyFeed;
 namespace PharmaGo.Api.Controllers;
 
 [ApiController]
+[ApiVersion("1.0")]
+[Route("api/v{version:apiVersion}/me/pharmacies")]
 [Route("api/me/pharmacies")]
 [Authorize]
 public class MePharmaciesController(

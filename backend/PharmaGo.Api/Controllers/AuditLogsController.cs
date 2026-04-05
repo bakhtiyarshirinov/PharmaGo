@@ -1,3 +1,4 @@
+using Asp.Versioning;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -8,6 +9,8 @@ using PharmaGo.Infrastructure.Auth;
 namespace PharmaGo.Api.Controllers;
 
 [ApiController]
+[ApiVersion("1.0")]
+[Route("api/v{version:apiVersion}/[controller]")]
 [Route("api/[controller]")]
 [Authorize(Policy = PolicyNames.ReadAuditLogs)]
 public class AuditLogsController(IApplicationDbContext context, ICurrentUserService currentUserService) : ApiControllerBase

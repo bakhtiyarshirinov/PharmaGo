@@ -39,6 +39,8 @@ The backend solves four main business flows:
 - `Moderator`: `+994500000002` / `Moderator123!`
 
 ## Main HTTP Areas
+- Canonical versioned API prefix: `/api/v1/...`
+- Legacy compatibility prefix: `/api/...` remains available for existing clients
 - `AuthController`: register, login, current user, role update
 - `UsersController`: moderator user management, pharmacist creation, soft delete and restore
 - `MedicinesController`: medicine catalog search, autocomplete, popular feed, medicine cards, substitutions, similar medicines and pharmacy availability
@@ -109,3 +111,4 @@ Read these next:
 
 - `docs/backend/CONTROLLERS.md`
 - `docs/backend/FILE_REFERENCE.md`
+- `docs/backend/AUTHORIZATION_MATRIX.md`

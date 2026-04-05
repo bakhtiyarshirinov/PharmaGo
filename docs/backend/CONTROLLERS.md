@@ -207,6 +207,12 @@ Important details:
 - all moderator actions are written to the audit log
 - list endpoint returns page metadata and sorting information
 
+## API Versioning
+
+- canonical API contract uses `/api/v1/...`
+- existing `/api/...` routes remain available as backward-compatible aliases
+- Swagger now publishes versioned documentation for `v1`
+
 ## ReservationsController
 File: `backend/PharmaGo.Api/Controllers/ReservationsController.cs`
 

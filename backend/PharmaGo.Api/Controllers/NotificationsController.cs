@@ -2,6 +2,7 @@ using Asp.Versioning;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using PharmaGo.Application.Abstractions;
+using PharmaGo.Application.Common.Contracts;
 using PharmaGo.Application.Notifications.Contracts;
 
 namespace PharmaGo.Api.Controllers;
@@ -17,10 +18,10 @@ public class NotificationsController(
     INotificationPreferenceService notificationPreferenceService) : ApiControllerBase
 {
     [HttpGet("history")]
-    [ProducesResponseType(typeof(IReadOnlyCollection<NotificationHistoryItemResponse>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(PagedResponse<NotificationHistoryItemResponse>), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status401Unauthorized)]
-    public async Task<ActionResult<IReadOnlyCollection<NotificationHistoryItemResponse>>> GetHistory(
-        [FromQuery] int limit = 20,
+    public async Task<ActionResult<PagedResponse<NotificationHistoryItemResponse>>> GetHistory(
+        [FromQuery] GetNotificationHistoryRequest request,
         CancellationToken cancellationToken = default)
     {
         if (!currentUserService.UserId.HasValue)
@@ -28,21 +29,23 @@ public class NotificationsController(
             return ApiUnauthorized();
         }
 
-        var response = await notificationInboxService.GetHistoryAsync(currentUserService.UserId.Value, limit, cancellationToken);
+        var response = await notificationInboxService.GetHistoryAsync(currentUserService.UserId.Value, request, cancellationToken);
         return Ok(response);
     }
 
     [HttpGet("unread")]
-    [ProducesResponseType(typeof(NotificationUnreadCountResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(NotificationInboxSummaryResponse), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status401Unauthorized)]
-    public async Task<ActionResult<NotificationUnreadCountResponse>> GetUnreadCount(CancellationToken cancellationToken)
+    public async Task<ActionResult<NotificationInboxSummaryResponse>> GetUnread(
+        [FromQuery] int previewLimit = 5,
+        CancellationToken cancellationToken = default)
     {
         if (!currentUserService.UserId.HasValue)
         {
             return ApiUnauthorized();
         }
 
-        var response = await notificationInboxService.GetUnreadCountAsync(currentUserService.UserId.Value, cancellationToken);
+        var response = await notificationInboxService.GetUnreadAsync(currentUserService.UserId.Value, previewLimit, cancellationToken);
         return Ok(response);
     }
 
@@ -91,6 +94,21 @@ public class NotificationsController(
         return updated ? NoContent() : ApiNotFound("notification_not_found", "Notification was not found.");
     }
 
+    [HttpPost("{id:guid}/unread")]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> MarkAsUnread(Guid id, CancellationToken cancellationToken)
+    {
+        if (!currentUserService.UserId.HasValue)
+        {
+            return ApiUnauthorized();
+        }
+
+        var updated = await notificationInboxService.MarkAsUnreadAsync(currentUserService.UserId.Value, id, cancellationToken);
+        return updated ? NoContent() : ApiNotFound("notification_not_found", "Notification was not found.");
+    }
+
     [HttpPost("read-all")]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType(StatusCodes.Status401Unauthorized)]
@@ -103,5 +121,41 @@ public class NotificationsController(
 
         await notificationInboxService.MarkAllAsReadAsync(currentUserService.UserId.Value, cancellationToken);
         return NoContent();
+    }
+
+    [HttpPost("unread-all")]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    public async Task<IActionResult> MarkAllAsUnread(CancellationToken cancellationToken)
+    {
+        if (!currentUserService.UserId.HasValue)
+        {
+            return ApiUnauthorized();
+        }
+
+        await notificationInboxService.MarkAllAsUnreadAsync(currentUserService.UserId.Value, cancellationToken);
+        return NoContent();
+    }
+
+    [HttpPost("status/bulk")]
+    [ProducesResponseType(typeof(NotificationBulkStatusUpdateResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    public async Task<ActionResult<NotificationBulkStatusUpdateResponse>> BulkUpdateStatus(
+        [FromBody] NotificationBulkStatusUpdateRequest request,
+        CancellationToken cancellationToken)
+    {
+        if (!currentUserService.UserId.HasValue)
+        {
+            return ApiUnauthorized();
+        }
+
+        if (request.NotificationIds.Count == 0)
+        {
+            return ApiValidationProblem("notifications_bulk_ids_required", "At least one notification id is required.");
+        }
+
+        var response = await notificationInboxService.BulkUpdateStatusAsync(currentUserService.UserId.Value, request, cancellationToken);
+        return Ok(response);
     }
 }

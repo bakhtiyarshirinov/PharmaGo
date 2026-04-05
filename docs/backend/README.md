@@ -48,7 +48,7 @@ The backend solves four main business flows:
 - `PharmaciesController`: nearby pharmacy discovery, map pins, autocomplete, popular feed, pharmacy cards and pharmacy catalog browsing
 - `MePharmaciesController`: authenticated consumer pharmacy feeds for favorites and recent views
 - `ReservationsController`: create reservation, active/timeline lookup and explicit lifecycle commands
-- `NotificationsController`: authenticated notification preferences, inbox history and unread/read actions for consumer delivery settings
+- `NotificationsController`: authenticated notification preferences, paged inbox history, unread preview and read-status actions for consumer delivery settings
 - `StocksController`: pharmacy stock CRUD, explicit inventory commands and operational stock alerts
 - `DashboardController`: summary metrics and recent reservations for staff dashboards
 - `AuditLogsController`: staff audit trail access
@@ -91,7 +91,7 @@ Workflow rules:
 - invalid lifecycle transitions now return `422 Unprocessable Entity` with problem details payload
 - background worker expires overdue reservations automatically
 - notification core writes delivery logs and sends in-app reservation events based on user preferences
-- authenticated users can query notification history, unread count and mark inbox items as read
+- authenticated users can query paged notification history, unread preview, and update read/unread state individually or in bulk
 - stock is released on `Cancelled` and `Expired`
 - stock is deducted on `Completed`
 - reservation responses now expose lifecycle timestamps for create, confirm, ready, complete, cancel and expire moments

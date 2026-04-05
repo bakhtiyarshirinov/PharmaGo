@@ -85,7 +85,11 @@ This file documents the purpose of every backend source file currently in the re
 
 ### Notifications
 - `backend/PharmaGo.Application/Notifications/Contracts/NotificationHistoryItemResponse.cs`: DTO returned by notification inbox history with read state and delivery metadata.
+- `backend/PharmaGo.Application/Notifications/Contracts/GetNotificationHistoryRequest.cs`: paged/filterable notification history query contract for UI inbox screens.
 - `backend/PharmaGo.Application/Notifications/Contracts/NotificationMessagePayload.cs`: realtime in-app notification payload sent to authenticated users.
+- `backend/PharmaGo.Application/Notifications/Contracts/NotificationBulkStatusUpdateRequest.cs`: request contract for bulk read/unread updates.
+- `backend/PharmaGo.Application/Notifications/Contracts/NotificationBulkStatusUpdateResponse.cs`: result summary returned by bulk notification status updates.
+- `backend/PharmaGo.Application/Notifications/Contracts/NotificationInboxSummaryResponse.cs`: unread count plus preview payload returned by inbox summary endpoint.
 - `backend/PharmaGo.Application/Notifications/Contracts/NotificationPreferencesResponse.cs`: DTO returned by notification preference endpoints.
 - `backend/PharmaGo.Application/Notifications/Contracts/NotificationUnreadCountResponse.cs`: DTO returned by unread notification count endpoint.
 - `backend/PharmaGo.Application/Notifications/Contracts/UpdateNotificationPreferencesRequest.cs`: request contract for updating notification preferences.

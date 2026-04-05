@@ -4,6 +4,7 @@ using System.Net.Http.Json;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using PharmaGo.Application.Auth.Contracts;
+using PharmaGo.Application.Common.Contracts;
 using PharmaGo.Application.Notifications.Contracts;
 using PharmaGo.Application.Reservations.Commands.CreateReservation;
 using PharmaGo.Application.Reservations.Queries.GetReservation;
@@ -26,15 +27,15 @@ public class NotificationInboxTests(CustomWebApplicationFactory factory) : IClas
     {
         var reservation = await CreateReadyReservationAsync("+994551110205", "notify-history@example.com");
 
-        var historyResponse = await _client.GetAsync("/api/notifications/history?limit=5");
+        var historyResponse = await _client.GetAsync("/api/notifications/history?page=1&pageSize=5");
 
         Assert.Equal(HttpStatusCode.OK, historyResponse.StatusCode);
 
-        var history = await historyResponse.Content.ReadAsAsync<IReadOnlyCollection<NotificationHistoryItemResponse>>();
+        var history = await historyResponse.Content.ReadAsAsync<PagedResponse<NotificationHistoryItemResponse>>();
         Assert.NotNull(history);
-        Assert.NotEmpty(history!);
+        Assert.NotEmpty(history!.Items);
 
-        var readyNotification = history!.FirstOrDefault(x =>
+        var readyNotification = history.Items.FirstOrDefault(x =>
             x.ReservationId == reservation.ReservationId &&
             x.EventType == NotificationEventType.ReservationReadyForPickup);
 
@@ -48,16 +49,16 @@ public class NotificationInboxTests(CustomWebApplicationFactory factory) : IClas
     {
         var reservation = await CreateReadyReservationAsync("+994551110206", "notify-read@example.com");
 
-        var historyResponse = await _client.GetAsync("/api/notifications/history?limit=5");
-        var history = await historyResponse.Content.ReadAsAsync<IReadOnlyCollection<NotificationHistoryItemResponse>>();
-        var notificationId = history!
+        var historyResponse = await _client.GetAsync("/api/notifications/history?page=1&pageSize=5");
+        var history = await historyResponse.Content.ReadAsAsync<PagedResponse<NotificationHistoryItemResponse>>();
+        var notificationId = history!.Items
             .Where(x => x.ReservationId == reservation.ReservationId)
             .OrderByDescending(x => x.CreatedAtUtc)
             .Select(x => x.NotificationId)
             .First();
 
         var unreadBeforeResponse = await _client.GetAsync("/api/notifications/unread");
-        var unreadBefore = await unreadBeforeResponse.Content.ReadAsAsync<NotificationUnreadCountResponse>();
+        var unreadBefore = await unreadBeforeResponse.Content.ReadAsAsync<NotificationInboxSummaryResponse>();
 
         Assert.NotNull(unreadBefore);
         Assert.True(unreadBefore!.UnreadCount >= 1);
@@ -66,17 +67,20 @@ public class NotificationInboxTests(CustomWebApplicationFactory factory) : IClas
         Assert.Equal(HttpStatusCode.NoContent, markReadResponse.StatusCode);
 
         var unreadAfterResponse = await _client.GetAsync("/api/notifications/unread");
-        var unreadAfter = await unreadAfterResponse.Content.ReadAsAsync<NotificationUnreadCountResponse>();
+        var unreadAfter = await unreadAfterResponse.Content.ReadAsAsync<NotificationInboxSummaryResponse>();
 
         Assert.NotNull(unreadAfter);
         Assert.Equal(unreadBefore.UnreadCount - 1, unreadAfter!.UnreadCount);
 
-        var refreshedHistoryResponse = await _client.GetAsync("/api/notifications/history?limit=5");
-        var refreshedHistory = await refreshedHistoryResponse.Content.ReadAsAsync<IReadOnlyCollection<NotificationHistoryItemResponse>>();
-        var updatedNotification = refreshedHistory!.Single(x => x.NotificationId == notificationId);
+        var markUnreadResponse = await _client.PostAsync($"/api/notifications/{notificationId}/unread", null);
+        Assert.Equal(HttpStatusCode.NoContent, markUnreadResponse.StatusCode);
 
-        Assert.True(updatedNotification.IsRead);
-        Assert.NotNull(updatedNotification.ReadAtUtc);
+        var refreshedHistoryResponse = await _client.GetAsync("/api/notifications/history?page=1&pageSize=5&unreadOnly=true");
+        var refreshedHistory = await refreshedHistoryResponse.Content.ReadAsAsync<PagedResponse<NotificationHistoryItemResponse>>();
+        var updatedNotification = refreshedHistory!.Items.Single(x => x.NotificationId == notificationId);
+
+        Assert.False(updatedNotification.IsRead);
+        Assert.Null(updatedNotification.ReadAtUtc);
     }
 
     [Fact]
@@ -91,7 +95,7 @@ public class NotificationInboxTests(CustomWebApplicationFactory factory) : IClas
         Assert.Equal(HttpStatusCode.NoContent, readAllResponse.StatusCode);
 
         var unreadResponse = await _client.GetAsync("/api/notifications/unread");
-        var unreadPayload = await unreadResponse.Content.ReadAsAsync<NotificationUnreadCountResponse>();
+        var unreadPayload = await unreadResponse.Content.ReadAsAsync<NotificationInboxSummaryResponse>();
 
         Assert.NotNull(unreadPayload);
         Assert.Equal(0, unreadPayload!.UnreadCount);
@@ -101,7 +105,7 @@ public class NotificationInboxTests(CustomWebApplicationFactory factory) : IClas
         Assert.NotNull(otherAuth);
 
         var otherUnreadResponse = await otherClient.GetAsync("/api/notifications/unread");
-        var otherUnreadPayload = await otherUnreadResponse.Content.ReadAsAsync<NotificationUnreadCountResponse>();
+        var otherUnreadPayload = await otherUnreadResponse.Content.ReadAsAsync<NotificationInboxSummaryResponse>();
 
         Assert.NotNull(otherUnreadPayload);
         Assert.True(otherUnreadPayload!.UnreadCount >= 1);
@@ -117,6 +121,57 @@ public class NotificationInboxTests(CustomWebApplicationFactory factory) : IClas
         Assert.Contains(
             await db.NotificationDeliveryLogs.Where(x => x.UserId == secondUserId && x.Status == NotificationDeliveryStatus.Sent).ToListAsync(),
             log => log.ReadAtUtc is null);
+    }
+
+    [Fact]
+    public async Task History_ShouldSupportUnreadFilters_AndBulkStatusUpdate()
+    {
+        var reservation = await CreateReadyReservationAsync("+994551110209", "notify-bulk@example.com");
+
+        var historyResponse = await _client.GetAsync("/api/notifications/history?page=1&pageSize=10&sortBy=eventType&sortDirection=asc");
+        Assert.Equal(HttpStatusCode.OK, historyResponse.StatusCode);
+
+        var history = await historyResponse.Content.ReadAsAsync<PagedResponse<NotificationHistoryItemResponse>>();
+        Assert.NotNull(history);
+        Assert.True(history!.TotalCount >= 1);
+
+        var targetIds = history.Items
+            .Where(x => x.ReservationId == reservation.ReservationId)
+            .Take(2)
+            .Select(x => x.NotificationId)
+            .ToArray();
+
+        Assert.NotEmpty(targetIds);
+
+        var bulkReadResponse = await _client.PostAsJsonAsync("/api/notifications/status/bulk", new NotificationBulkStatusUpdateRequest
+        {
+            NotificationIds = targetIds,
+            MarkAsRead = true
+        });
+
+        Assert.Equal(HttpStatusCode.OK, bulkReadResponse.StatusCode);
+        var bulkReadPayload = await bulkReadResponse.Content.ReadAsAsync<NotificationBulkStatusUpdateResponse>();
+        Assert.NotNull(bulkReadPayload);
+        Assert.Equal(targetIds.Length, bulkReadPayload!.RequestedCount);
+        Assert.True(bulkReadPayload.UpdatedCount >= 1);
+
+        var bulkUnreadResponse = await _client.PostAsJsonAsync("/api/notifications/status/bulk", new NotificationBulkStatusUpdateRequest
+        {
+            NotificationIds = targetIds,
+            MarkAsRead = false
+        });
+
+        Assert.Equal(HttpStatusCode.OK, bulkUnreadResponse.StatusCode);
+        var bulkUnreadPayload = await bulkUnreadResponse.Content.ReadAsAsync<NotificationBulkStatusUpdateResponse>();
+        Assert.NotNull(bulkUnreadPayload);
+        Assert.Equal(targetIds.Length, bulkUnreadPayload!.RequestedCount);
+
+        var unreadOnlyResponse = await _client.GetAsync("/api/notifications/history?page=1&pageSize=10&unreadOnly=true&status=1");
+        Assert.Equal(HttpStatusCode.OK, unreadOnlyResponse.StatusCode);
+
+        var unreadOnlyPayload = await unreadOnlyResponse.Content.ReadAsAsync<PagedResponse<NotificationHistoryItemResponse>>();
+        Assert.NotNull(unreadOnlyPayload);
+        Assert.Contains(unreadOnlyPayload!.Items, x => targetIds.Contains(x.NotificationId));
     }
 
     private async Task<ReservationResponse> CreateReadyReservationAsync(string phoneNumber, string email, HttpClient? client = null)

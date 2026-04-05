@@ -271,16 +271,26 @@ Endpoints:
   - updates notification delivery preferences for reservation lifecycle events
 - `GET /api/notifications/history`
   - authenticated
-  - returns recent notification delivery log items for the current user
+  - returns paged notification delivery log items for the current user
+  - supports `page`, `pageSize`, `unreadOnly`, `eventType`, `status`, `sortBy`, `sortDirection`
 - `GET /api/notifications/unread`
   - authenticated
-  - returns unread in-app notification count for the current user
+  - returns unread count plus latest unread preview items for the current user
 - `POST /api/notifications/{id}/read`
   - authenticated
   - marks a single notification inbox item as read
+- `POST /api/notifications/{id}/unread`
+  - authenticated
+  - marks a single notification inbox item as unread again
 - `POST /api/notifications/read-all`
   - authenticated
   - marks all unread in-app notifications as read for the current user
+- `POST /api/notifications/unread-all`
+  - authenticated
+  - marks all sent inbox items as unread for the current user
+- `POST /api/notifications/status/bulk`
+  - authenticated
+  - marks a selected set of notifications as read or unread and returns update summary
 
 Important details:
 - common controller-level validation, auth, forbidden and not-found failures now return problem-details payloads with stable `code` extensions
@@ -298,7 +308,7 @@ Important details:
 - delegates stock release and completion rules to `IReservationStateService`
 - delegates transition permissions and allowed state changes to `IReservationTransitionPolicy`
 - creates in-app notification delivery logs for reservation lifecycle events and expiring-soon reminders
-- exposes a lightweight notification inbox surface backed by delivery logs and read timestamps
+- exposes a UI-facing notification inbox surface with paging, unread preview, filters and bulk read/unread operations
 - dashboard and medicine-search caches are invalidated on reservation writes and automatic expiration
 
 ## StocksController

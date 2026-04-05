@@ -42,7 +42,7 @@ The backend solves four main business flows:
 - `UsersController`: moderator user management, pharmacist creation, soft delete and restore
 - `MedicinesController`: medicine catalog search, autocomplete, medicine cards and pharmacy availability
 - `PharmaciesController`: nearby pharmacy discovery, map pins, autocomplete, pharmacy cards and pharmacy catalog browsing
-- `ReservationsController`: create reservation, read own reservations, pharmacy reservation workflow
+- `ReservationsController`: create reservation, active/timeline lookup and explicit lifecycle commands
 - `StocksController`: pharmacy stock CRUD, low-stock alerts and supplier restock suggestions
 - `DashboardController`: summary metrics and recent reservations for staff dashboards
 - `AuditLogsController`: staff audit trail access
@@ -79,10 +79,11 @@ Supported statuses:
 Workflow rules:
 
 - customer can cancel own active reservation
-- pharmacist or moderator can move reservation through pharmacy workflow
+- pharmacist or moderator can confirm, mark ready for pickup, complete or expire reservations
 - background worker expires overdue reservations automatically
 - stock is released on `Cancelled` and `Expired`
 - stock is deducted on `Completed`
+- reservation responses now expose lifecycle timestamps for create, confirm, ready, complete, cancel and expire moments
 
 ## Operational Notes
 - API startup runs migrations and seed logic automatically

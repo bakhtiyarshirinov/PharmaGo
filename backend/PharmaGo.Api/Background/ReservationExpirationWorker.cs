@@ -4,6 +4,7 @@ using PharmaGo.Api.Realtime;
 using PharmaGo.Application.Abstractions;
 using PharmaGo.Application.Reservations.Queries.GetReservation;
 using PharmaGo.Domain.Models.Enums;
+using PharmaGo.Infrastructure.Caching;
 
 namespace PharmaGo.Api.Background;
 
@@ -36,6 +37,7 @@ public class ReservationExpirationWorker(
         using var scope = scopeFactory.CreateScope();
 
         var context = scope.ServiceProvider.GetRequiredService<IApplicationDbContext>();
+        var cacheService = scope.ServiceProvider.GetRequiredService<IAppCacheService>();
         var reservationStateService = scope.ServiceProvider.GetRequiredService<IReservationStateService>();
         var auditService = scope.ServiceProvider.GetRequiredService<IAuditService>();
         var realtimeNotificationService = scope.ServiceProvider.GetRequiredService<RealtimeNotificationService>();
@@ -62,10 +64,13 @@ public class ReservationExpirationWorker(
         foreach (var reservation in reservations)
         {
             reservation.Status = ReservationStatus.Expired;
+            reservation.ExpiredAtUtc = now;
             await reservationStateService.ReleaseReservedStockAsync(reservation, cancellationToken);
         }
 
         await context.SaveChangesAsync(cancellationToken);
+        await cacheService.BumpScopeVersionAsync(CacheScopes.MedicinesSearch, cancellationToken);
+        await cacheService.BumpScopeVersionAsync(CacheScopes.Dashboard, cancellationToken);
 
         foreach (var reservation in reservations)
         {
@@ -81,7 +86,13 @@ public class ReservationExpirationWorker(
                     ? string.Empty
                     : $"{reservation.Customer.FirstName} {reservation.Customer.LastName}",
                 PhoneNumber = reservation.Customer?.PhoneNumber ?? string.Empty,
+                CreatedAtUtc = reservation.CreatedAtUtc,
                 ReservedUntilUtc = reservation.ReservedUntilUtc,
+                ConfirmedAtUtc = reservation.ConfirmedAtUtc,
+                ReadyForPickupAtUtc = reservation.ReadyForPickupAtUtc,
+                CompletedAtUtc = reservation.CompletedAtUtc,
+                CancelledAtUtc = reservation.CancelledAtUtc,
+                ExpiredAtUtc = reservation.ExpiredAtUtc,
                 TotalAmount = reservation.TotalAmount,
                 Notes = reservation.Notes,
                 Items = reservation.Items.Select(item => new ReservationItemResponse
@@ -112,6 +123,7 @@ public class ReservationExpirationWorker(
                 {
                     reservation.Id,
                     reservation.ReservationNumber,
+                    Status = reservation.Status.ToString(),
                     reservation.ReservedUntilUtc
                 },
                 cancellationToken: cancellationToken);

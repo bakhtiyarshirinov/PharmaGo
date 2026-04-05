@@ -15,7 +15,10 @@ public class Reservation : BaseEntity
     public string? Notes { get; set; }
     public DateTime ReservedUntilUtc { get; set; }
     public DateTime? ConfirmedAtUtc { get; set; }
+    public DateTime? ReadyForPickupAtUtc { get; set; }
+    public DateTime? CompletedAtUtc { get; set; }
     public DateTime? CancelledAtUtc { get; set; }
+    public DateTime? ExpiredAtUtc { get; set; }
     public decimal TotalAmount { get; set; }
     public string? TelegramChatId { get; set; }
     public Guid ConcurrencyToken { get; set; } = Guid.NewGuid();

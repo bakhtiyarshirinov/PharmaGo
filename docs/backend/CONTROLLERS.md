@@ -151,6 +151,11 @@ Endpoints:
 - `GET /api/reservations/my`
   - authenticated
   - returns current user reservations
+- `GET /api/reservations/active`
+  - authenticated
+  - customer sees own active reservations
+  - pharmacist sees active reservations in own pharmacy by default
+  - moderator can query active reservations globally or by `pharmacyId`
 - `GET /api/reservations/pharmacy/{pharmacyId}`
   - pharmacist or moderator
   - lists pharmacy reservations, optionally filtered by status
@@ -158,11 +163,30 @@ Endpoints:
   - authenticated
   - customer can read own reservation
   - staff can read pharmacy reservations
+- `GET /api/reservations/{id}/timeline`
+  - authenticated
+  - returns reservation audit-backed lifecycle history
 - `POST /api/reservations`
   - authenticated
   - creates reservation against available stock in selected pharmacy
   - reserves stock immediately
+- `POST /api/reservations/{id}/confirm`
+  - pharmacist or moderator
+  - explicitly confirms reservation when workflow starts from `Pending`
+- `POST /api/reservations/{id}/ready-for-pickup`
+  - pharmacist or moderator
+  - marks reservation as prepared and ready for customer pickup
+- `POST /api/reservations/{id}/complete`
+  - pharmacist or moderator
+  - deducts reserved stock from inventory and completes reservation
+- `POST /api/reservations/{id}/cancel`
+  - customer can cancel own active reservation
+  - staff can cancel active pharmacy reservations
+- `POST /api/reservations/{id}/expire`
+  - pharmacist or moderator
+  - expires reservation explicitly and releases reserved stock
 - `PATCH /api/reservations/{id}/status`
+  - backward-compatible generic transition endpoint
   - customer can cancel own active reservation
   - staff can move reservation through pharmacy workflow
 
@@ -170,11 +194,14 @@ Important details:
 - validates requested quantities and reservation lifetime
 - reserves from the earliest-expiring stock first
 - wraps reservation writes in database transactions and detects concurrent stock changes
+- active reservations exclude already elapsed holds even if background expiration has not run yet
+- timeline is built from reservation audit events and exposes actor, description and resolved status
 - sends SignalR events on create and status changes
 - publishes low-stock notifications when reservations reduce availability
 - writes audit records for create and status transitions
+- uses explicit audit actions such as `reservation.cancelled`, `reservation.completed` and `reservation.expired`
 - delegates stock release and completion rules to `IReservationStateService`
-- dashboard and medicine-search caches are invalidated on reservation writes
+- dashboard and medicine-search caches are invalidated on reservation writes and automatic expiration
 
 ## StocksController
 File: `backend/PharmaGo.Api/Controllers/StocksController.cs`

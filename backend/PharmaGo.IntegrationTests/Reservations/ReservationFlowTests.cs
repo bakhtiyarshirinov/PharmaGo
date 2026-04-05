@@ -7,6 +7,7 @@ using PharmaGo.Application.Auth.Contracts;
 using PharmaGo.Application.Reservations.Commands.CreateReservation;
 using PharmaGo.Application.Reservations.Commands.UpdateReservationStatus;
 using PharmaGo.Application.Reservations.Queries.GetReservation;
+using PharmaGo.Application.Reservations.Queries.GetReservationTimeline;
 using PharmaGo.Application.Stocks.Queries.GetRestockSuggestions;
 using PharmaGo.Domain.Models.Enums;
 using PharmaGo.IntegrationTests.Infrastructure;
@@ -71,7 +72,7 @@ public class ReservationFlowTests(CustomWebApplicationFactory factory) : IClassF
     }
 
     [Fact]
-    public async Task Pharmacist_ShouldCompleteReservation_AndDeductStock()
+    public async Task Pharmacist_ShouldCompleteReservation_UsingExplicitCommands_AndDeductStock()
     {
         using var scope = factory.Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
@@ -121,15 +122,15 @@ public class ReservationFlowTests(CustomWebApplicationFactory factory) : IClassF
 
         _client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", pharmacistAuth!.AccessToken);
 
-        var readyResponse = await _client.PatchAsJsonAsync(
-            $"/api/reservations/{reservation!.ReservationId}/status",
-            new UpdateReservationStatusRequest { Status = ReservationStatus.ReadyForPickup });
+        var readyResponse = await _client.PostAsync(
+            $"/api/reservations/{reservation!.ReservationId}/ready-for-pickup",
+            content: null);
 
         Assert.Equal(HttpStatusCode.OK, readyResponse.StatusCode);
 
-        var completeResponse = await _client.PatchAsJsonAsync(
-            $"/api/reservations/{reservation.ReservationId}/status",
-            new UpdateReservationStatusRequest { Status = ReservationStatus.Completed });
+        var completeResponse = await _client.PostAsync(
+            $"/api/reservations/{reservation.ReservationId}/complete",
+            content: null);
 
         Assert.Equal(HttpStatusCode.OK, completeResponse.StatusCode);
 
@@ -139,6 +140,175 @@ public class ReservationFlowTests(CustomWebApplicationFactory factory) : IClassF
         Assert.Equal(initialQuantity - 1, updatedStock.Quantity);
         Assert.Equal(0, updatedStock.ReservedQuantity);
         Assert.Equal(ReservationStatus.Completed, updatedReservation.Status);
+    }
+
+    [Fact]
+    public async Task User_ShouldCancelOwnReservation_UsingExplicitCommand_AndReleaseStock()
+    {
+        using var scope = factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+        var pharmacy = await db.Pharmacies.FirstAsync(x => x.Name == "PharmaGo Central");
+        var stockItem = await db.StockItems.Include(x => x.Medicine).FirstAsync(x => x.PharmacyId == pharmacy.Id && x.Quantity >= 2);
+
+        var registerResponse = await _client.PostAsJsonAsync("/api/auth/register", new RegisterRequest
+        {
+            FirstName = "Cancel",
+            LastName = "User",
+            PhoneNumber = "+994551110012",
+            Email = "cancel@example.com",
+            Password = "TestPassword123!"
+        });
+
+        var auth = await registerResponse.Content.ReadAsAsync<AuthResponse>();
+        Assert.NotNull(auth);
+
+        _client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", auth!.AccessToken);
+
+        var createResponse = await _client.PostAsJsonAsync("/api/reservations", new CreateReservationRequest
+        {
+            PharmacyId = pharmacy.Id,
+            ReserveForHours = 2,
+            Items =
+            [
+                new CreateReservationItemRequest
+                {
+                    MedicineId = stockItem.MedicineId,
+                    Quantity = 2
+                }
+            ]
+        });
+
+        var reservation = await createResponse.Content.ReadAsAsync<ReservationResponse>();
+        Assert.NotNull(reservation);
+
+        var cancelResponse = await _client.PostAsync($"/api/reservations/{reservation!.ReservationId}/cancel", content: null);
+        Assert.Equal(HttpStatusCode.OK, cancelResponse.StatusCode);
+
+        var cancelledReservation = await cancelResponse.Content.ReadAsAsync<ReservationResponse>();
+        Assert.NotNull(cancelledReservation);
+        Assert.Equal(ReservationStatus.Cancelled, cancelledReservation!.Status);
+        Assert.NotNull(cancelledReservation.CancelledAtUtc);
+
+        var updatedStock = await db.StockItems.AsNoTracking().FirstAsync(x => x.Id == stockItem.Id);
+        Assert.Equal(0, updatedStock.ReservedQuantity);
+    }
+
+    [Fact]
+    public async Task Active_ShouldReturnOnlyCurrentUserOpenReservations()
+    {
+        using var scope = factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+        var pharmacy = await db.Pharmacies.FirstAsync(x => x.Name == "PharmaGo Central");
+        var stockItem = await db.StockItems
+            .FirstAsync(x => x.PharmacyId == pharmacy.Id && x.Quantity >= 5);
+
+        var registerResponse = await _client.PostAsJsonAsync("/api/auth/register", new RegisterRequest
+        {
+            FirstName = "Active",
+            LastName = "User",
+            PhoneNumber = "+994551110013",
+            Email = "active@example.com",
+            Password = "TestPassword123!"
+        });
+
+        var auth = await registerResponse.Content.ReadAsAsync<AuthResponse>();
+        Assert.NotNull(auth);
+
+        _client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", auth!.AccessToken);
+
+        var firstCreateResponse = await _client.PostAsJsonAsync("/api/reservations", new CreateReservationRequest
+        {
+            PharmacyId = pharmacy.Id,
+            ReserveForHours = 2,
+            Items =
+            [
+                new CreateReservationItemRequest
+                {
+                    MedicineId = stockItem.MedicineId,
+                    Quantity = 1
+                }
+            ]
+        });
+        var secondCreateResponse = await _client.PostAsJsonAsync("/api/reservations", new CreateReservationRequest
+        {
+            PharmacyId = pharmacy.Id,
+            ReserveForHours = 2,
+            Items =
+            [
+                new CreateReservationItemRequest
+                {
+                    MedicineId = stockItem.MedicineId,
+                    Quantity = 1
+                }
+            ]
+        });
+
+        var activeReservation = await firstCreateResponse.Content.ReadAsAsync<ReservationResponse>();
+        var cancelledReservation = await secondCreateResponse.Content.ReadAsAsync<ReservationResponse>();
+        Assert.NotNull(activeReservation);
+        Assert.NotNull(cancelledReservation);
+
+        var cancelResponse = await _client.PostAsync($"/api/reservations/{cancelledReservation!.ReservationId}/cancel", content: null);
+        Assert.Equal(HttpStatusCode.OK, cancelResponse.StatusCode);
+
+        var response = await _client.GetAsync("/api/reservations/active");
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        var payload = await response.Content.ReadAsAsync<IReadOnlyCollection<ReservationResponse>>();
+        Assert.NotNull(payload);
+        Assert.Single(payload!, x => x.ReservationId == activeReservation!.ReservationId);
+        Assert.DoesNotContain(payload!, x => x.ReservationId == cancelledReservation.ReservationId);
+    }
+
+    [Fact]
+    public async Task Timeline_ShouldReturnLifecycleEvents_ForReservation()
+    {
+        using var scope = factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+        var pharmacy = await db.Pharmacies.FirstAsync(x => x.Name == "PharmaGo Central");
+        var stockItem = await db.StockItems.FirstAsync(x => x.PharmacyId == pharmacy.Id && x.Quantity >= 1);
+
+        var registerResponse = await _client.PostAsJsonAsync("/api/auth/register", new RegisterRequest
+        {
+            FirstName = "Timeline",
+            LastName = "User",
+            PhoneNumber = "+994551110014",
+            Email = "timeline@example.com",
+            Password = "TestPassword123!"
+        });
+
+        var auth = await registerResponse.Content.ReadAsAsync<AuthResponse>();
+        Assert.NotNull(auth);
+
+        _client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", auth!.AccessToken);
+
+        var createResponse = await _client.PostAsJsonAsync("/api/reservations", new CreateReservationRequest
+        {
+            PharmacyId = pharmacy.Id,
+            ReserveForHours = 2,
+            Items =
+            [
+                new CreateReservationItemRequest
+                {
+                    MedicineId = stockItem.MedicineId,
+                    Quantity = 1
+                }
+            ]
+        });
+
+        var reservation = await createResponse.Content.ReadAsAsync<ReservationResponse>();
+        Assert.NotNull(reservation);
+
+        var cancelResponse = await _client.PostAsync($"/api/reservations/{reservation!.ReservationId}/cancel", content: null);
+        Assert.Equal(HttpStatusCode.OK, cancelResponse.StatusCode);
+
+        var timelineResponse = await _client.GetAsync($"/api/reservations/{reservation.ReservationId}/timeline");
+        Assert.Equal(HttpStatusCode.OK, timelineResponse.StatusCode);
+
+        var timeline = await timelineResponse.Content.ReadAsAsync<IReadOnlyCollection<ReservationTimelineEventResponse>>();
+        Assert.NotNull(timeline);
+        Assert.Contains(timeline!, x => x.Action == "reservation.created" && x.Status == ReservationStatus.Confirmed);
+        Assert.Contains(timeline!, x => x.Action == "reservation.cancelled" && x.Status == ReservationStatus.Cancelled);
     }
 
     [Fact]

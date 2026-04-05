@@ -2,11 +2,13 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Npgsql;
+using System.Text.Json;
 using PharmaGo.Api.Realtime;
 using PharmaGo.Application.Abstractions;
 using PharmaGo.Application.Reservations.Commands.CreateReservation;
 using PharmaGo.Application.Reservations.Commands.UpdateReservationStatus;
 using PharmaGo.Application.Reservations.Queries.GetReservation;
+using PharmaGo.Application.Reservations.Queries.GetReservationTimeline;
 using PharmaGo.Application.Stocks.Queries.GetLowStockAlerts;
 using PharmaGo.Domain.Models;
 using PharmaGo.Domain.Models.Enums;
@@ -68,6 +70,70 @@ public class ReservationsController(
     }
 
     [Authorize]
+    [HttpGet("active")]
+    [ProducesResponseType(typeof(IReadOnlyCollection<ReservationResponse>), StatusCodes.Status200OK)]
+    public async Task<ActionResult<IReadOnlyCollection<ReservationResponse>>> GetActive(
+        [FromQuery] Guid? pharmacyId,
+        CancellationToken cancellationToken)
+    {
+        if (!currentUserService.UserId.HasValue)
+        {
+            return Unauthorized();
+        }
+
+        var activeStatuses = new[]
+        {
+            ReservationStatus.Pending,
+            ReservationStatus.Confirmed,
+            ReservationStatus.ReadyForPickup
+        };
+
+        var now = DateTime.UtcNow;
+        var isModerator = User.IsInRole(RoleNames.Moderator);
+        var isPharmacist = User.IsInRole(RoleNames.Pharmacist);
+
+        IQueryable<ReservationResponse> query = QueryReservations()
+            .Where(x => activeStatuses.Contains(x.Status) && x.ReservedUntilUtc > now);
+
+        if (isPharmacist || isModerator)
+        {
+            var effectivePharmacyId = pharmacyId;
+
+            if (effectivePharmacyId.HasValue)
+            {
+                var accessResult = await EnsurePharmacyStaffAccessAsync(effectivePharmacyId.Value, cancellationToken);
+                if (accessResult is not null)
+                {
+                    return accessResult;
+                }
+            }
+            else if (isPharmacist && !isModerator)
+            {
+                var currentUser = await context.Users
+                    .AsNoTracking()
+                    .FirstOrDefaultAsync(x => x.Id == currentUserService.UserId.Value, cancellationToken);
+
+                effectivePharmacyId = currentUser?.PharmacyId;
+            }
+
+            if (effectivePharmacyId.HasValue)
+            {
+                query = query.Where(x => x.PharmacyId == effectivePharmacyId.Value);
+            }
+        }
+        else
+        {
+            query = query.Where(x => x.CustomerId == currentUserService.UserId.Value);
+        }
+
+        var reservations = await query
+            .OrderBy(x => x.ReservedUntilUtc)
+            .ToListAsync(cancellationToken);
+
+        return Ok(reservations);
+    }
+
+    [Authorize]
     [HttpGet("{id:guid}")]
     [ProducesResponseType(typeof(ReservationResponse), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
@@ -88,7 +154,71 @@ public class ReservationsController(
             return Forbid();
         }
 
+        if (isStaff && User.IsInRole(RoleNames.Pharmacist) && !User.IsInRole(RoleNames.Moderator))
+        {
+            var accessResult = await EnsurePharmacyStaffAccessAsync(reservation.PharmacyId, cancellationToken);
+            if (accessResult is not null)
+            {
+                return accessResult;
+            }
+        }
+
         return Ok(reservation);
+    }
+
+    [Authorize]
+    [HttpGet("{id:guid}/timeline")]
+    [ProducesResponseType(typeof(IReadOnlyCollection<ReservationTimelineEventResponse>), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<ActionResult<IReadOnlyCollection<ReservationTimelineEventResponse>>> GetTimeline(
+        Guid id,
+        CancellationToken cancellationToken)
+    {
+        var reservation = await context.Reservations
+            .AsNoTracking()
+            .FirstOrDefaultAsync(x => x.Id == id, cancellationToken);
+
+        if (reservation is null)
+        {
+            return NotFound();
+        }
+
+        var accessResult = await EnsureReservationAccessAsync(reservation.CustomerId, reservation.PharmacyId, cancellationToken);
+        if (accessResult is not null)
+        {
+            return accessResult;
+        }
+
+        var auditEvents = await context.AuditLogs
+            .AsNoTracking()
+            .Where(x => x.EntityName == "Reservation" && x.EntityId == id.ToString())
+            .OrderBy(x => x.CreatedAtUtc)
+            .Select(x => new
+            {
+                x.Action,
+                x.Description,
+                x.MetadataJson,
+                x.CreatedAtUtc,
+                x.UserId,
+                UserFullName = x.User != null ? $"{x.User.FirstName} {x.User.LastName}" : null
+            })
+            .ToListAsync(cancellationToken);
+
+        var events = auditEvents
+            .Select(x => new ReservationTimelineEventResponse
+            {
+                Action = x.Action,
+                Title = ToTimelineTitle(x.Action),
+                Description = x.Description,
+                Status = TryReadStatus(x.Action, x.MetadataJson),
+                OccurredAtUtc = x.CreatedAtUtc,
+                UserId = x.UserId,
+                UserFullName = x.UserFullName,
+                IsSystemEvent = x.UserId == null
+            })
+            .ToList();
+
+        return Ok(events);
     }
 
     [Authorize(Policy = PolicyNames.CreateReservations)]
@@ -254,7 +384,13 @@ public class ReservationsController(
                     CustomerId = customer.Id,
                     CustomerFullName = $"{customer.FirstName} {customer.LastName}",
                     PhoneNumber = customer.PhoneNumber,
+                    CreatedAtUtc = reservation.CreatedAtUtc,
                     ReservedUntilUtc = reservation.ReservedUntilUtc,
+                    ConfirmedAtUtc = reservation.ConfirmedAtUtc,
+                    ReadyForPickupAtUtc = reservation.ReadyForPickupAtUtc,
+                    CompletedAtUtc = reservation.CompletedAtUtc,
+                    CancelledAtUtc = reservation.CancelledAtUtc,
+                    ExpiredAtUtc = reservation.ExpiredAtUtc,
                     TotalAmount = reservation.TotalAmount,
                     Notes = reservation.Notes,
                     Items = reservation.Items.Select(item => new ReservationItemResponse
@@ -282,6 +418,7 @@ public class ReservationsController(
                 {
                     response.ReservationId,
                     response.ReservationNumber,
+                    Status = response.Status.ToString(),
                     response.PharmacyId,
                     response.CustomerId,
                     response.TotalAmount,
@@ -308,15 +445,100 @@ public class ReservationsController(
         }
     }
 
+    [Authorize(Policy = PolicyNames.ManageOrders)]
+    [HttpPost("{id:guid}/confirm")]
+    [ProducesResponseType(typeof(ReservationResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public Task<ActionResult<ReservationResponse>> Confirm(Guid id, CancellationToken cancellationToken)
+        => TransitionAsync(id, ReservationStatus.Confirmed, cancellationToken);
+
+    [Authorize(Policy = PolicyNames.ManageOrders)]
+    [HttpPost("{id:guid}/ready-for-pickup")]
+    [ProducesResponseType(typeof(ReservationResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public Task<ActionResult<ReservationResponse>> MarkReadyForPickup(Guid id, CancellationToken cancellationToken)
+        => TransitionAsync(id, ReservationStatus.ReadyForPickup, cancellationToken);
+
+    [Authorize(Policy = PolicyNames.ManageOrders)]
+    [HttpPost("{id:guid}/complete")]
+    [ProducesResponseType(typeof(ReservationResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public Task<ActionResult<ReservationResponse>> Complete(Guid id, CancellationToken cancellationToken)
+        => TransitionAsync(id, ReservationStatus.Completed, cancellationToken);
+
+    [Authorize]
+    [HttpPost("{id:guid}/cancel")]
+    [ProducesResponseType(typeof(ReservationResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public Task<ActionResult<ReservationResponse>> Cancel(Guid id, CancellationToken cancellationToken)
+        => TransitionAsync(id, ReservationStatus.Cancelled, cancellationToken);
+
+    [Authorize(Policy = PolicyNames.ManageOrders)]
+    [HttpPost("{id:guid}/expire")]
+    [ProducesResponseType(typeof(ReservationResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public Task<ActionResult<ReservationResponse>> Expire(Guid id, CancellationToken cancellationToken)
+        => TransitionAsync(id, ReservationStatus.Expired, cancellationToken);
+
     [Authorize]
     [HttpPatch("{id:guid}/status")]
     [ProducesResponseType(typeof(ReservationResponse), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status403Forbidden)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
-    public async Task<ActionResult<ReservationResponse>> UpdateStatus(
+    public Task<ActionResult<ReservationResponse>> UpdateStatus(
         Guid id,
         [FromBody] UpdateReservationStatusRequest request,
+        CancellationToken cancellationToken) => TransitionAsync(id, request.Status, cancellationToken);
+
+    private IQueryable<ReservationResponse> QueryReservations()
+    {
+        return context.Reservations
+            .AsNoTracking()
+            .Select(x => new ReservationResponse
+            {
+                ReservationId = x.Id,
+                ReservationNumber = x.ReservationNumber,
+                Status = x.Status,
+                PharmacyId = x.PharmacyId,
+                PharmacyName = x.Pharmacy!.Name,
+                CustomerId = x.CustomerId,
+                CustomerFullName = $"{x.Customer!.FirstName} {x.Customer.LastName}",
+                PhoneNumber = x.Customer.PhoneNumber,
+                CreatedAtUtc = x.CreatedAtUtc,
+                ReservedUntilUtc = x.ReservedUntilUtc,
+                ConfirmedAtUtc = x.ConfirmedAtUtc,
+                ReadyForPickupAtUtc = x.ReadyForPickupAtUtc,
+                CompletedAtUtc = x.CompletedAtUtc,
+                CancelledAtUtc = x.CancelledAtUtc,
+                ExpiredAtUtc = x.ExpiredAtUtc,
+                TotalAmount = x.TotalAmount,
+                Notes = x.Notes,
+                Items = x.Items.Select(item => new ReservationItemResponse
+                {
+                    MedicineId = item.MedicineId,
+                    MedicineName = item.Medicine!.BrandName,
+                    GenericName = item.Medicine.GenericName,
+                    Quantity = item.Quantity,
+                    UnitPrice = item.UnitPrice,
+                    TotalPrice = item.TotalPrice
+                }).ToList()
+            });
+    }
+
+    private async Task<ActionResult<ReservationResponse>> TransitionAsync(
+        Guid id,
+        ReservationStatus nextStatus,
         CancellationToken cancellationToken)
     {
         var dbContext = (ApplicationDbContext)context;
@@ -332,7 +554,7 @@ public class ReservationsController(
             return NotFound();
         }
 
-        if (reservation.Status == request.Status)
+        if (reservation.Status == nextStatus)
         {
             var currentResponse = await QueryReservations()
                 .Where(x => x.ReservationId == reservation.Id)
@@ -354,7 +576,7 @@ public class ReservationsController(
             }
         }
 
-        if (!CanChangeStatus(reservation.Status, request.Status, isOwner, isPharmacist || isModerator))
+        if (!CanChangeStatus(reservation.Status, nextStatus, isOwner, isPharmacist || isModerator))
         {
             return BadRequest("The requested reservation status transition is not allowed.");
         }
@@ -364,6 +586,7 @@ public class ReservationsController(
             return Forbid();
         }
 
+        var previousStatus = reservation.Status;
         List<StockItem> completedStocks = [];
 
         try
@@ -385,33 +608,30 @@ public class ReservationsController(
                     throw new ReservationRequestException(StatusCodes.Status404NotFound, "Reservation was not found.");
                 }
 
-                if (reservation.Status == request.Status)
+                if (reservation.Status == nextStatus)
                 {
                     await transaction.RollbackAsync(cancellationToken);
                     return;
                 }
 
-                if (!CanChangeStatus(reservation.Status, request.Status, isOwner, isPharmacist || isModerator))
+                if (!CanChangeStatus(reservation.Status, nextStatus, isOwner, isPharmacist || isModerator))
                 {
                     throw new ReservationRequestException(
                         StatusCodes.Status400BadRequest,
                         "The requested reservation status transition is not allowed.");
                 }
 
-                reservation.Status = request.Status;
+                previousStatus = reservation.Status;
+                reservation.Status = nextStatus;
 
-                if (request.Status == ReservationStatus.Cancelled)
-                {
-                    reservation.CancelledAtUtc = DateTime.UtcNow;
-                    await reservationStateService.ReleaseReservedStockAsync(reservation, cancellationToken);
-                }
+                ApplyLifecycleTimestamps(reservation, nextStatus);
 
-                if (request.Status == ReservationStatus.Expired)
+                if (nextStatus == ReservationStatus.Cancelled || nextStatus == ReservationStatus.Expired)
                 {
                     await reservationStateService.ReleaseReservedStockAsync(reservation, cancellationToken);
                 }
 
-                if (request.Status == ReservationStatus.Completed)
+                if (nextStatus == ReservationStatus.Completed)
                 {
                     completedStocks = await context.StockItems
                         .Where(x => x.PharmacyId == reservation.PharmacyId &&
@@ -442,7 +662,7 @@ public class ReservationsController(
             return Conflict("Reservation or stock changed while updating status. Please refresh and try again.");
         }
 
-        if (request.Status == ReservationStatus.Completed)
+        if (nextStatus == ReservationStatus.Completed)
         {
             await PublishLowStockNotificationsAsync(completedStocks, cancellationToken);
         }
@@ -460,16 +680,17 @@ public class ReservationsController(
             response,
             cancellationToken);
         await auditService.WriteAsync(
-            action: "reservation.status.updated",
+            action: ToAuditAction(nextStatus),
             entityName: "Reservation",
             entityId: response.ReservationId.ToString(),
             userId: currentUserService.UserId,
             pharmacyId: response.PharmacyId,
-            description: $"Reservation {response.ReservationNumber} status changed to {response.Status}.",
+            description: $"Reservation {response.ReservationNumber} status changed from {previousStatus} to {response.Status}.",
             metadata: new
             {
                 response.ReservationId,
                 response.ReservationNumber,
+                PreviousStatus = previousStatus.ToString(),
                 Status = response.Status.ToString()
             },
             cancellationToken: cancellationToken);
@@ -477,33 +698,28 @@ public class ReservationsController(
         return Ok(response);
     }
 
-    private IQueryable<ReservationResponse> QueryReservations()
+    private async Task<ActionResult?> EnsureReservationAccessAsync(
+        Guid customerId,
+        Guid pharmacyId,
+        CancellationToken cancellationToken)
     {
-        return context.Reservations
-            .AsNoTracking()
-            .Select(x => new ReservationResponse
+        var isStaff = User.IsInRole(RoleNames.Pharmacist) || User.IsInRole(RoleNames.Moderator);
+        if (!isStaff)
+        {
+            if (currentUserService.UserId != customerId)
             {
-                ReservationId = x.Id,
-                ReservationNumber = x.ReservationNumber,
-                Status = x.Status,
-                PharmacyId = x.PharmacyId,
-                PharmacyName = x.Pharmacy!.Name,
-                CustomerId = x.CustomerId,
-                CustomerFullName = $"{x.Customer!.FirstName} {x.Customer.LastName}",
-                PhoneNumber = x.Customer.PhoneNumber,
-                ReservedUntilUtc = x.ReservedUntilUtc,
-                TotalAmount = x.TotalAmount,
-                Notes = x.Notes,
-                Items = x.Items.Select(item => new ReservationItemResponse
-                {
-                    MedicineId = item.MedicineId,
-                    MedicineName = item.Medicine!.BrandName,
-                    GenericName = item.Medicine.GenericName,
-                    Quantity = item.Quantity,
-                    UnitPrice = item.UnitPrice,
-                    TotalPrice = item.TotalPrice
-                }).ToList()
-            });
+                return Forbid();
+            }
+
+            return null;
+        }
+
+        if (User.IsInRole(RoleNames.Pharmacist) && !User.IsInRole(RoleNames.Moderator))
+        {
+            return await EnsurePharmacyStaffAccessAsync(pharmacyId, cancellationToken);
+        }
+
+        return null;
     }
 
     private async Task<ActionResult?> EnsurePharmacyStaffAccessAsync(Guid pharmacyId, CancellationToken cancellationToken)
@@ -528,6 +744,87 @@ public class ReservationsController(
         }
 
         return null;
+    }
+
+    private static void ApplyLifecycleTimestamps(Reservation reservation, ReservationStatus nextStatus)
+    {
+        var utcNow = DateTime.UtcNow;
+
+        switch (nextStatus)
+        {
+            case ReservationStatus.Confirmed:
+                reservation.ConfirmedAtUtc ??= utcNow;
+                break;
+            case ReservationStatus.ReadyForPickup:
+                reservation.ReadyForPickupAtUtc = utcNow;
+                break;
+            case ReservationStatus.Completed:
+                reservation.CompletedAtUtc = utcNow;
+                break;
+            case ReservationStatus.Cancelled:
+                reservation.CancelledAtUtc = utcNow;
+                break;
+            case ReservationStatus.Expired:
+                reservation.ExpiredAtUtc = utcNow;
+                break;
+        }
+    }
+
+    private static string ToAuditAction(ReservationStatus nextStatus)
+    {
+        return nextStatus switch
+        {
+            ReservationStatus.Confirmed => "reservation.confirmed",
+            ReservationStatus.ReadyForPickup => "reservation.ready_for_pickup",
+            ReservationStatus.Completed => "reservation.completed",
+            ReservationStatus.Cancelled => "reservation.cancelled",
+            ReservationStatus.Expired => "reservation.expired",
+            _ => "reservation.status.updated"
+        };
+    }
+
+    private static string ToTimelineTitle(string action)
+    {
+        return action switch
+        {
+            "reservation.created" => "Created",
+            "reservation.confirmed" => "Confirmed",
+            "reservation.ready_for_pickup" => "Ready For Pickup",
+            "reservation.completed" => "Completed",
+            "reservation.cancelled" => "Cancelled",
+            "reservation.expired" => "Expired",
+            _ => "Updated"
+        };
+    }
+
+    private static ReservationStatus? TryReadStatus(string action, string? metadataJson)
+    {
+        if (!string.IsNullOrWhiteSpace(metadataJson))
+        {
+            try
+            {
+                using var document = JsonDocument.Parse(metadataJson);
+                if (document.RootElement.TryGetProperty("Status", out var statusElement) &&
+                    Enum.TryParse<ReservationStatus>(statusElement.GetString(), ignoreCase: true, out var parsedStatus))
+                {
+                    return parsedStatus;
+                }
+            }
+            catch (JsonException)
+            {
+            }
+        }
+
+        return action switch
+        {
+            "reservation.created" => ReservationStatus.Confirmed,
+            "reservation.confirmed" => ReservationStatus.Confirmed,
+            "reservation.ready_for_pickup" => ReservationStatus.ReadyForPickup,
+            "reservation.completed" => ReservationStatus.Completed,
+            "reservation.cancelled" => ReservationStatus.Cancelled,
+            "reservation.expired" => ReservationStatus.Expired,
+            _ => null
+        };
     }
 
     private static bool CanChangeStatus(

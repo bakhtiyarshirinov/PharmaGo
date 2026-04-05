@@ -11,7 +11,9 @@ import {
 } from '@mui/material'
 import FavoriteBorderRoundedIcon from '@mui/icons-material/FavoriteBorderRounded'
 import FavoriteRoundedIcon from '@mui/icons-material/FavoriteRounded'
+import LocalOfferRoundedIcon from '@mui/icons-material/LocalOfferRounded'
 import MedicationRoundedIcon from '@mui/icons-material/MedicationRounded'
+import VerifiedRoundedIcon from '@mui/icons-material/VerifiedRounded'
 import SearchRoundedIcon from '@mui/icons-material/SearchRounded'
 import ShoppingBagRoundedIcon from '@mui/icons-material/ShoppingBagRounded'
 import TuneRoundedIcon from '@mui/icons-material/TuneRounded'
@@ -107,6 +109,7 @@ export function MedicinesPage() {
   const favorites = normalizeItems(favoritesQuery.data)
   const recent = normalizeItems(recentQuery.data)
   const favoriteIds = useMemo(() => new Set(favorites.map((item) => item.medicineId)), [favorites])
+  const bestOffer = availability[0]
 
   useEffect(() => {
     if (!medicineId && results[0]?.medicineId) {
@@ -182,6 +185,12 @@ export function MedicinesPage() {
 
           <Divider sx={{ my: 3 }} />
 
+          <Stack direction="row" spacing={1} sx={{ mb: 2, flexWrap: 'wrap' }}>
+            <MetaChip label={`${substitutions.length} substitutions`} color="secondary" />
+            <MetaChip label={`${similar.length} similar`} color="primary" />
+            <MetaChip label={selected?.requiresPrescription ? 'Prescription-aware' : 'OTC friendly'} color={selected?.requiresPrescription ? 'warning' : 'success'} />
+          </Stack>
+
           <EntityList
             items={results}
             primaryKey="medicineId"
@@ -245,6 +254,37 @@ export function MedicinesPage() {
                     <InfoCard title="Available units" value={selected.totalAvailableQuantity ?? 0} />
                   </Grid>
                 </Grid>
+
+                {bestOffer ? (
+                  <Grid container spacing={2}>
+                    <Grid size={{ xs: 12, md: 7 }}>
+                      <SectionCard
+                        title="Best live offer"
+                        subtitle={`${bestOffer.pharmacyName} • ${bestOffer.city || 'Unknown city'} • ${bestOffer.availableQuantity || 0} units right now`}
+                        accent="secondary"
+                        tone="warm"
+                        actions={<MetaChip label={formatMoney(bestOffer.retailPrice)} color="secondary" />}
+                      >
+                        <Stack spacing={1.5}>
+                          <Stack direction="row" spacing={1} flexWrap="wrap">
+                            <MetaChip label={bestOffer.isOpenNow ? 'Open now' : 'Store profile'} color={bestOffer.isOpenNow ? 'success' : 'default'} />
+                            <MetaChip label={bestOffer.supportsReservations ? 'Instant reservation' : 'View only'} color={bestOffer.supportsReservations ? 'primary' : 'default'} />
+                            <MetaChip label={bestOffer.hasDelivery ? 'Delivery' : 'Pickup'} />
+                          </Stack>
+                          <Typography variant="body2" sx={{ color: 'text.secondary' }}>
+                            {bestOffer.address || 'Address unavailable'}
+                          </Typography>
+                        </Stack>
+                      </SectionCard>
+                    </Grid>
+                    <Grid size={{ xs: 12, md: 5 }}>
+                      <Stack spacing={2}>
+                        <InfoCard title="Price edge" value={formatMoney(bestOffer.retailPrice)} />
+                        <InfoCard title="Quick reserve" value={bestOffer.supportsReservations ? 'Available' : 'Unavailable'} />
+                      </Stack>
+                    </Grid>
+                  </Grid>
+                ) : null}
 
                 <Stack direction={{ xs: 'column', md: 'row' }} spacing={1.5}>
                   {session ? (
@@ -335,6 +375,7 @@ export function MedicinesPage() {
                     <>
                       <MetaChip label={formatMoney(item.minRetailPrice)} color="secondary" />
                       <MetaChip label={item.hasAvailability ? 'Available' : 'Limited'} color={item.hasAvailability ? 'success' : 'default'} />
+                      <MetaChip label="Safer switch" color="primary" />
                     </>
                   )}
                   onItemClick={(item) => navigate(`/medicines/${item.medicineId}`)}
@@ -353,6 +394,7 @@ export function MedicinesPage() {
                     <>
                       <MetaChip label={formatMoney(item.minRetailPrice)} color="secondary" />
                       <MetaChip label={`${item.pharmacyCount || 0} stores`} color="primary" />
+                      <MetaChip label="Explore alternative" />
                     </>
                   )}
                   onItemClick={(item) => navigate(`/medicines/${item.medicineId}`)}

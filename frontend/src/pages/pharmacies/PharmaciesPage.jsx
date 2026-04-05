@@ -6,6 +6,7 @@ import ShoppingBagRoundedIcon from '@mui/icons-material/ShoppingBagRounded'
 import StorefrontRoundedIcon from '@mui/icons-material/StorefrontRounded'
 import AddLocationAltRoundedIcon from '@mui/icons-material/AddLocationAltRounded'
 import DeliveryDiningRoundedIcon from '@mui/icons-material/DeliveryDiningRounded'
+import VerifiedRoundedIcon from '@mui/icons-material/VerifiedRounded'
 import { useEffect, useMemo, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import {
@@ -82,6 +83,7 @@ export function PharmaciesPage() {
   const favorites = normalizeItems(favoritesQuery.data)
   const recent = normalizeItems(recentQuery.data)
   const favoriteIds = useMemo(() => new Set(favorites.map((item) => item.pharmacyId)), [favorites])
+  const topCatalogItem = catalog[0]
 
   useEffect(() => {
     if (!pharmacyId && results[0]?.pharmacyId) {
@@ -149,6 +151,12 @@ export function PharmaciesPage() {
 
           <Divider sx={{ my: 3 }} />
 
+          <Stack direction="row" spacing={1} sx={{ mb: 2, flexWrap: 'wrap' }}>
+            <MetaChip label={`${results.length} live stores`} color="primary" />
+            <MetaChip label={results.some((item) => item.hasDelivery) ? 'Delivery available' : 'Pickup first'} color="secondary" />
+            <MetaChip label="Open cards + browse catalog" />
+          </Stack>
+
           <EntityList
             items={results}
             primaryKey="pharmacyId"
@@ -209,6 +217,29 @@ export function PharmaciesPage() {
                   </Grid>
                 </Grid>
 
+                <Grid container spacing={2}>
+                  <Grid size={{ xs: 12, md: 8 }}>
+                    <SectionCard
+                      title="Store quality snapshot"
+                      subtitle={selected.hasDelivery ? 'This pharmacy supports delivery and pickup scenarios.' : 'This pharmacy is optimized for pickup and in-store fulfillment.'}
+                      tone="cool"
+                      actions={<MetaChip label={selected.supportsReservations ? 'Reservations on' : 'Reservations off'} color={selected.supportsReservations ? 'primary' : 'default'} />}
+                    >
+                      <Stack direction="row" spacing={1} flexWrap="wrap">
+                        <MetaChip label={selected.isOpenNow ? 'Open now' : 'Hours configured'} color={selected.isOpenNow ? 'success' : 'default'} />
+                        <MetaChip label={selected.hasDelivery ? 'Delivery' : 'Pickup'} color="secondary" />
+                        <MetaChip label="Verified location" color="primary" />
+                      </Stack>
+                    </SectionCard>
+                  </Grid>
+                  <Grid size={{ xs: 12, md: 4 }}>
+                    <Stack spacing={2}>
+                      <InfoCard title="Verified" value={selected.lastLocationVerifiedAtUtc ? 'Recently' : 'Pending'} />
+                      <InfoCard title="Best visible price" value={formatMoney(selected.minAvailablePrice)} />
+                    </Stack>
+                  </Grid>
+                </Grid>
+
                 <Stack direction={{ xs: 'column', md: 'row' }} spacing={1.5}>
                   {session ? (
                     <Button
@@ -247,6 +278,21 @@ export function PharmaciesPage() {
                 tone="warm"
                 actions={<MetaChip label={`${catalog.length} live items`} color="secondary" />}
               >
+                {topCatalogItem ? (
+                  <SectionCard
+                    title="Highlighted shelf"
+                    subtitle={`${topCatalogItem.brandName} • ${topCatalogItem.genericName || 'Medicine'} • ${topCatalogItem.availableQuantity || 0} units`}
+                    tone="warm"
+                    accent="secondary"
+                    actions={<MetaChip label={formatMoney(topCatalogItem.retailPrice || topCatalogItem.minRetailPrice)} color="secondary" />}
+                  >
+                    <Stack direction="row" spacing={1} flexWrap="wrap">
+                      <MetaChip label={topCatalogItem.isReservable ? 'Reservable' : 'View only'} color={topCatalogItem.isReservable ? 'success' : 'default'} />
+                      <MetaChip label="Featured in this store" color="primary" />
+                    </Stack>
+                  </SectionCard>
+                ) : null}
+
                 <EntityList
                   items={catalog}
                   primaryKey="medicineId"
@@ -256,6 +302,7 @@ export function PharmaciesPage() {
                     <>
                       <MetaChip label={formatMoney(item.retailPrice || item.minRetailPrice)} color="secondary" />
                       <MetaChip label={item.isReservable ? 'Reservable' : 'View only'} color={item.isReservable ? 'success' : 'default'} />
+                      <MetaChip label="In-store fit" color="primary" />
                     </>
                   )}
                   trailingRenderer={(item) => (

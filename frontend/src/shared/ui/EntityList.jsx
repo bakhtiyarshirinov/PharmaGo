@@ -84,9 +84,9 @@ export function EntityList({
   )
 }
 
-export function SmallAction({ children, onClick, color = 'primary' }) {
+export function SmallAction({ children, onClick, color = 'primary', disabled = false }) {
   return (
-    <Button size="small" color={color} onClick={onClick}>
+    <Button size="small" color={color} onClick={onClick} disabled={disabled}>
       {children}
     </Button>
   )

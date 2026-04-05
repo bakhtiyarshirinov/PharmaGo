@@ -17,7 +17,7 @@ This file documents the purpose of every backend source file currently in the re
 
 ### Controllers
 - `backend/PharmaGo.Api/Controllers/AuthController.cs`: authentication and role management endpoints.
-- `backend/PharmaGo.Api/Controllers/MedicinesController.cs`: public medicine search endpoints with availability projection.
+- `backend/PharmaGo.Api/Controllers/MedicinesController.cs`: public medicine search, recommendation and availability endpoints.
 - `backend/PharmaGo.Api/Controllers/PharmaciesController.cs`: public nearby-pharmacy discovery endpoint with geo filters and paging.
 - `backend/PharmaGo.Api/Controllers/UsersController.cs`: moderator-only user management endpoints with soft delete and restore.
 - `backend/PharmaGo.Api/Controllers/ReservationsController.cs`: reservation create, active/timeline lookup and explicit workflow transition endpoints.
@@ -70,6 +70,7 @@ This file documents the purpose of every backend source file currently in the re
 - `backend/PharmaGo.Application/Medicines/Queries/GetMedicineAvailability/MedicineAvailabilityPharmacyResponse.cs`: pharmacy row returned by medicine availability endpoint.
 - `backend/PharmaGo.Application/Medicines/Queries/GetMedicineAvailability/MedicineAvailabilityResponse.cs`: aggregate medicine availability response with medicine details and pharmacy list.
 - `backend/PharmaGo.Application/Medicines/Queries/GetMedicineDetail/MedicineDetailResponse.cs`: public medicine-card DTO with category and live availability summary.
+- `backend/PharmaGo.Application/Medicines/Queries/GetMedicineRecommendations/MedicineRecommendationResponse.cs`: DTO for substitutions and similar-medicine recommendations with availability summary and match reason.
 - `backend/PharmaGo.Application/Medicines/Queries/SearchMedicines/MedicineAvailabilityDto.cs`: pharmacy-level availability row for search results.
 - `backend/PharmaGo.Application/Medicines/Queries/SearchMedicines/MedicineSuggestionResponse.cs`: lightweight medicine autocomplete row for consumer search inputs.
 - `backend/PharmaGo.Application/Medicines/Queries/SearchMedicines/SearchMedicinesRequest.cs`: query model for medicine search with geo-aware ranking and payload limits.
@@ -200,7 +201,7 @@ This file documents the purpose of every backend source file currently in the re
 ### Services
 - `backend/PharmaGo.Infrastructure/Services/AuditService.cs`: writes persisted audit records to the database.
 - `backend/PharmaGo.Infrastructure/Services/MedicineAvailabilityService.cs`: builds consumer-facing pharmacy availability read models for a selected medicine.
-- `backend/PharmaGo.Infrastructure/Services/MedicineCatalogService.cs`: builds public medicine-card read models with live availability summary.
+- `backend/PharmaGo.Infrastructure/Services/MedicineCatalogService.cs`: builds public medicine-card, substitution and similar-medicine read models with cached availability summaries.
 - `backend/PharmaGo.Infrastructure/Services/MedicineSearchService.cs`: executes consumer-facing medicine search with geo filters, ranking and capped nested availabilities.
 - `backend/PharmaGo.Infrastructure/Services/PharmacyCatalogService.cs`: builds pharmacy-card and pharmacy-centric medicine catalog read models.
 - `backend/PharmaGo.Infrastructure/Services/PharmacyDiscoveryService.cs`: searches nearby pharmacies with geo, opening-hours and availability summary calculations.
@@ -222,6 +223,7 @@ This file documents the purpose of every backend source file currently in the re
 - `backend/PharmaGo.IntegrationTests/Auth/AuthFlowTests.cs`: covers register, refresh rotation, logout and revoke-all flows.
 - `backend/PharmaGo.IntegrationTests/Medicines/MedicineAvailabilityTests.cs`: covers consumer-facing medicine availability lookup and reservable-only filtering.
 - `backend/PharmaGo.IntegrationTests/Medicines/MedicineCatalogTests.cs`: covers medicine-card lookup with live summary data.
+- `backend/PharmaGo.IntegrationTests/Medicines/MedicineRecommendationTests.cs`: covers substitution and similar-medicine recommendation endpoints.
 - `backend/PharmaGo.IntegrationTests/Medicines/MedicineSearchTests.cs`: covers geo-aware medicine search, reservable-only filtering and invalid coordinate input handling.
 - `backend/PharmaGo.IntegrationTests/Medicines/MedicineSuggestionsTests.cs`: covers lightweight medicine autocomplete endpoints.
 - `backend/PharmaGo.IntegrationTests/Pharmacies/PharmacyCatalogTests.cs`: covers pharmacy-card lookup and pharmacy-centric medicine catalog browsing.

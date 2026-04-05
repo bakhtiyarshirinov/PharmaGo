@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.Mvc;
 using PharmaGo.Application.Abstractions;
 using PharmaGo.Application.Medicines.Queries.GetMedicineAvailability;
 using PharmaGo.Application.Medicines.Queries.GetMedicineDetail;
+using PharmaGo.Application.Medicines.Queries.GetMedicineRecommendations;
 using PharmaGo.Application.Medicines.Queries.SearchMedicines;
 
 namespace PharmaGo.Api.Controllers;
@@ -61,6 +62,30 @@ public class MedicinesController(
     {
         var response = await medicineCatalogService.GetByIdAsync(id, cancellationToken);
         return response is null ? NotFound() : Ok(response);
+    }
+
+    [HttpGet("{id:guid}/substitutions")]
+    [ProducesResponseType(typeof(IReadOnlyCollection<MedicineRecommendationResponse>), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<ActionResult<IReadOnlyCollection<MedicineRecommendationResponse>>> GetSubstitutions(
+        Guid id,
+        [FromQuery] int limit,
+        CancellationToken cancellationToken)
+    {
+        var response = await medicineCatalogService.GetSubstitutionsAsync(id, limit == 0 ? 10 : limit, cancellationToken);
+        return response is null ? NotFound("Medicine was not found.") : Ok(response);
+    }
+
+    [HttpGet("{id:guid}/similar")]
+    [ProducesResponseType(typeof(IReadOnlyCollection<MedicineRecommendationResponse>), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<ActionResult<IReadOnlyCollection<MedicineRecommendationResponse>>> GetSimilar(
+        Guid id,
+        [FromQuery] int limit,
+        CancellationToken cancellationToken)
+    {
+        var response = await medicineCatalogService.GetSimilarAsync(id, limit == 0 ? 10 : limit, cancellationToken);
+        return response is null ? NotFound("Medicine was not found.") : Ok(response);
     }
 
     [HttpGet("{id:guid}/availability")]

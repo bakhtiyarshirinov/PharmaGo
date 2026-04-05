@@ -58,6 +58,12 @@ Endpoints:
 - `GET /api/medicines/{id}`
   - public
   - returns full medicine card with category and current availability summary
+- `GET /api/medicines/{id}/substitutions`
+  - public
+  - returns close brand substitutions with the same generic name, dosage form and strength
+- `GET /api/medicines/{id}/similar`
+  - public
+  - returns similar medicines based on category, dosage form and prescription profile
 - `GET /api/medicines/{id}/availability`
   - public
   - returns pharmacies that currently stock the selected medicine
@@ -69,6 +75,8 @@ Important details:
 - search responses are cached and invalidated when stock or reservation state changes
 - search can rank by relevance, distance or price
 - nested availabilities are distance-aware and capped with `availabilityLimit` for smaller payloads
+- substitutions use a safe same-generic same-form same-strength rule for additive MVP behavior
+- similar medicines prefer same category and dosage form while avoiding exact self matches
 - availability response can sort by distance or price and includes open-now and reservation capability flags
 
 ## PharmaciesController

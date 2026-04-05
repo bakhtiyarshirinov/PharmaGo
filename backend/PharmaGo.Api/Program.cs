@@ -8,6 +8,7 @@ using PharmaGo.Infrastructure;
 using PharmaGo.Infrastructure.Persistence;
 
 var builder = WebApplication.CreateBuilder(args);
+const string FrontendCorsPolicy = "FrontendDev";
 
 builder.Services.AddInfrastructure(builder.Configuration);
 builder.Services.AddProblemDetails();
@@ -20,6 +21,20 @@ builder.Services.AddHostedService<ReservationExpirationWorker>();
 builder.Services.AddHealthChecks()
     .AddDbContextCheck<ApplicationDbContext>();
 builder.Services.AddEndpointsApiExplorer();
+builder.Services.AddCors(options =>
+{
+    options.AddPolicy(FrontendCorsPolicy, policy =>
+    {
+        policy.WithOrigins(
+                "http://localhost:5173",
+                "http://127.0.0.1:5173",
+                "http://localhost:4173",
+                "http://127.0.0.1:4173")
+            .AllowAnyHeader()
+            .AllowAnyMethod()
+            .AllowCredentials();
+    });
+});
 builder.Services.AddSwaggerGen(options =>
 {
     options.SwaggerDoc("v1", new OpenApiInfo
@@ -68,6 +83,7 @@ if (!app.Environment.IsDevelopment())
 }
 
 app.UseAuthentication();
+app.UseCors(FrontendCorsPolicy);
 app.UseAuthorization();
 app.MapControllers();
 app.MapHub<NotificationHub>("/hubs/notifications");

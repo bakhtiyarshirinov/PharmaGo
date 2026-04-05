@@ -16,7 +16,7 @@ namespace PharmaGo.Api.Controllers;
 public class DashboardController(
     IApplicationDbContext context,
     IAppCacheService cacheService,
-    ICurrentUserService currentUserService) : ControllerBase
+    ICurrentUserService currentUserService) : ApiControllerBase
 {
     [HttpGet("summary")]
     [ProducesResponseType(typeof(DashboardSummaryResponse), StatusCodes.Status200OK)]
@@ -27,7 +27,7 @@ public class DashboardController(
         var effectivePharmacyId = await GetEffectivePharmacyIdAsync(pharmacyId, cancellationToken);
         if (effectivePharmacyId == Guid.Empty)
         {
-            return Forbid();
+            return ApiForbidden("You do not have access to the requested pharmacy dashboard scope.");
         }
 
         var scopeVersion = await cacheService.GetScopeVersionAsync(CacheScopes.Dashboard, cancellationToken);
@@ -107,7 +107,7 @@ public class DashboardController(
         var effectivePharmacyId = await GetEffectivePharmacyIdAsync(pharmacyId, cancellationToken);
         if (effectivePharmacyId == Guid.Empty)
         {
-            return Forbid();
+            return ApiForbidden("You do not have access to the requested pharmacy dashboard scope.");
         }
 
         var scopeVersion = await cacheService.GetScopeVersionAsync(CacheScopes.Dashboard, cancellationToken);

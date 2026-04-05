@@ -10,7 +10,7 @@ namespace PharmaGo.Api.Controllers;
 [ApiController]
 [Route("api/[controller]")]
 [Authorize(Policy = PolicyNames.ReadAuditLogs)]
-public class AuditLogsController(IApplicationDbContext context, ICurrentUserService currentUserService) : ControllerBase
+public class AuditLogsController(IApplicationDbContext context, ICurrentUserService currentUserService) : ApiControllerBase
 {
     [HttpGet]
     [ProducesResponseType(typeof(IReadOnlyCollection<AuditLogResponse>), StatusCodes.Status200OK)]
@@ -79,7 +79,7 @@ public class AuditLogsController(IApplicationDbContext context, ICurrentUserServ
 
         if (currentUser?.PharmacyId != pharmacyId)
         {
-            return Forbid();
+            return ApiForbidden("You do not have access to audit logs for the requested pharmacy.");
         }
 
         return null;

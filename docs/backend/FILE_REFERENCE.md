@@ -17,6 +17,8 @@ This file documents the purpose of every backend source file currently in the re
 
 ### Controllers
 - `backend/PharmaGo.Api/Controllers/AuthController.cs`: authentication and role management endpoints.
+- `backend/PharmaGo.Api/Controllers/ApiControllerBase.cs`: shared API controller base with helper methods for unified problem-details responses.
+- `backend/PharmaGo.Api/Controllers/ApiProblemDetailsFactory.cs`: centralized builder for standardized problem-details payloads and validation errors.
 - `backend/PharmaGo.Api/Controllers/MedicinesController.cs`: public medicine search, recommendation, popular-feed and availability endpoints.
 - `backend/PharmaGo.Api/Controllers/MeMedicinesController.cs`: authenticated consumer medicine feeds for favorites and recent views.
 - `backend/PharmaGo.Api/Controllers/PharmaciesController.cs`: public nearby-pharmacy discovery, popular-feed and catalog endpoints with geo filters and paging.

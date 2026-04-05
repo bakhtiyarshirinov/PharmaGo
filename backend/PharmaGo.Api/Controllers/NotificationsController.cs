@@ -10,7 +10,7 @@ namespace PharmaGo.Api.Controllers;
 [Authorize]
 public class NotificationsController(
     ICurrentUserService currentUserService,
-    INotificationPreferenceService notificationPreferenceService) : ControllerBase
+    INotificationPreferenceService notificationPreferenceService) : ApiControllerBase
 {
     [HttpGet("preferences")]
     [ProducesResponseType(typeof(NotificationPreferencesResponse), StatusCodes.Status200OK)]
@@ -19,7 +19,7 @@ public class NotificationsController(
     {
         if (!currentUserService.UserId.HasValue)
         {
-            return Unauthorized();
+            return ApiUnauthorized();
         }
 
         var response = await notificationPreferenceService.GetAsync(currentUserService.UserId.Value, cancellationToken);
@@ -35,7 +35,7 @@ public class NotificationsController(
     {
         if (!currentUserService.UserId.HasValue)
         {
-            return Unauthorized();
+            return ApiUnauthorized();
         }
 
         var response = await notificationPreferenceService.UpdateAsync(currentUserService.UserId.Value, request, cancellationToken);

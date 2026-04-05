@@ -30,7 +30,7 @@ public class ReservationsController(
     IReservationNotificationService reservationNotificationService,
     IReservationStateService reservationStateService,
     IReservationTransitionPolicy reservationTransitionPolicy,
-    RealtimeNotificationService realtimeNotificationService) : ControllerBase
+    RealtimeNotificationService realtimeNotificationService) : ApiControllerBase
 {
     private const string IdempotencyKeyHeaderName = "Idempotency-Key";
 
@@ -41,7 +41,7 @@ public class ReservationsController(
     {
         if (!currentUserService.UserId.HasValue)
         {
-            return Unauthorized();
+            return ApiUnauthorized();
         }
 
         var reservations = await QueryReservations()
@@ -84,7 +84,7 @@ public class ReservationsController(
     {
         if (!currentUserService.UserId.HasValue)
         {
-            return Unauthorized();
+            return ApiUnauthorized();
         }
 
         var activeStatuses = new[]
@@ -151,13 +151,13 @@ public class ReservationsController(
 
         if (reservation is null)
         {
-            return NotFound();
+            return ApiNotFound("reservation_not_found", "Reservation was not found.");
         }
 
         var isStaff = User.IsInRole(RoleNames.Pharmacist) || User.IsInRole(RoleNames.Moderator);
         if (!isStaff && reservation.CustomerId != currentUserService.UserId)
         {
-            return Forbid();
+            return ApiForbidden("You do not have access to this reservation.");
         }
 
         if (isStaff && User.IsInRole(RoleNames.Pharmacist) && !User.IsInRole(RoleNames.Moderator))
@@ -186,7 +186,7 @@ public class ReservationsController(
 
         if (reservation is null)
         {
-            return NotFound();
+            return ApiNotFound("reservation_not_found", "Reservation was not found.");
         }
 
         var accessResult = await EnsureReservationAccessAsync(reservation.CustomerId, reservation.PharmacyId, cancellationToken);
@@ -259,7 +259,7 @@ public class ReservationsController(
 
         if (!currentUserService.UserId.HasValue)
         {
-            return Unauthorized();
+            return ApiUnauthorized();
         }
 
         if (!string.IsNullOrWhiteSpace(idempotencyKey) && idempotencyKey.Length > 128)
@@ -666,7 +666,7 @@ public class ReservationsController(
 
         if (reservation is null)
         {
-            return NotFound();
+            return ApiNotFound("reservation_not_found", "Reservation was not found.");
         }
 
         if (reservation.Status == nextStatus)
@@ -843,7 +843,7 @@ public class ReservationsController(
         {
             if (currentUserService.UserId != customerId)
             {
-                return Forbid();
+                return ApiForbidden("You do not have access to this reservation.");
             }
 
             return null;
@@ -866,7 +866,7 @@ public class ReservationsController(
 
         if (!currentUserService.UserId.HasValue)
         {
-            return Unauthorized();
+            return ApiUnauthorized();
         }
 
         var currentUser = await context.Users
@@ -875,7 +875,7 @@ public class ReservationsController(
 
         if (currentUser is null || currentUser.PharmacyId != pharmacyId)
         {
-            return Forbid();
+            return ApiForbidden("You do not have access to reservations for this pharmacy.");
         }
 
         return null;

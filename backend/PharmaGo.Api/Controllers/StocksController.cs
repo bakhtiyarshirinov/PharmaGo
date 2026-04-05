@@ -27,7 +27,7 @@ public class StocksController(
     IAppCacheService cacheService,
     IAuditService auditService,
     ICurrentUserService currentUserService,
-    RealtimeNotificationService realtimeNotificationService) : ControllerBase
+    RealtimeNotificationService realtimeNotificationService) : ApiControllerBase
 {
     [HttpGet("alerts/low-stock")]
     [ProducesResponseType(typeof(IReadOnlyCollection<LowStockAlertResponse>), StatusCodes.Status200OK)]
@@ -136,7 +136,7 @@ public class StocksController(
     {
         if (days <= 0 || days > 180)
         {
-            return BadRequest("Days must be between 1 and 180.");
+            return ApiValidationProblem("stock_expiring_days_invalid", "Days must be between 1 and 180.");
         }
 
         var scopeResult = await ResolveEffectivePharmacyScopeAsync(pharmacyId, cancellationToken);
@@ -373,7 +373,7 @@ public class StocksController(
 
         if (validationError is not null)
         {
-            return BadRequest(validationError);
+            return ApiValidationProblem("stock_validation_error", validationError);
         }
 
         var accessResult = await EnsurePharmacyAccessAsync(request.PharmacyId, cancellationToken);
@@ -387,7 +387,7 @@ public class StocksController(
             .FirstOrDefaultAsync(x => x.Id == request.PharmacyId && x.IsActive, cancellationToken);
         if (pharmacy is null)
         {
-            return NotFound("Pharmacy was not found.");
+            return ApiNotFound("pharmacy_not_found", "Pharmacy was not found.");
         }
 
         var medicine = await context.Medicines
@@ -395,7 +395,7 @@ public class StocksController(
             .FirstOrDefaultAsync(x => x.Id == request.MedicineId && x.IsActive, cancellationToken);
         if (medicine is null)
         {
-            return NotFound("Medicine was not found.");
+            return ApiNotFound("medicine_not_found", "Medicine was not found.");
         }
 
         var duplicateBatch = await context.StockItems.AnyAsync(
@@ -406,7 +406,7 @@ public class StocksController(
 
         if (duplicateBatch)
         {
-            return BadRequest("A stock item with the same pharmacy, medicine and batch number already exists.");
+            return ApiConflict("stock_batch_duplicate", "A stock item with the same pharmacy, medicine and batch number already exists.");
         }
 
         var stockItem = new StockItem
@@ -466,13 +466,13 @@ public class StocksController(
     {
         if (request.QuantityDelta == 0)
         {
-            return BadRequest("QuantityDelta must not be zero.");
+            return ApiValidationProblem("stock_adjustment_invalid", "QuantityDelta must not be zero.");
         }
 
         var stockItem = await LoadStockItemAsync(id, cancellationToken);
         if (stockItem is null)
         {
-            return NotFound();
+            return ApiNotFound("stock_item_not_found", "Stock item was not found.");
         }
 
         var accessResult = await EnsurePharmacyAccessAsync(stockItem.PharmacyId, cancellationToken);
@@ -484,12 +484,12 @@ public class StocksController(
         var updatedQuantity = stockItem.Quantity + request.QuantityDelta;
         if (updatedQuantity < 0)
         {
-            return BadRequest("Quantity cannot become negative.");
+            return ApiValidationProblem("stock_quantity_invalid", "Quantity cannot become negative.");
         }
 
         if (updatedQuantity < stockItem.ReservedQuantity)
         {
-            return BadRequest("Adjusted quantity cannot be lower than the currently reserved quantity.");
+            return ApiValidationProblem("stock_quantity_reserved_conflict", "Adjusted quantity cannot be lower than the currently reserved quantity.");
         }
 
         var wasLowStock = stockItem.IsLowStock;
@@ -523,13 +523,13 @@ public class StocksController(
     {
         if (request.QuantityReceived <= 0)
         {
-            return BadRequest("QuantityReceived must be greater than zero.");
+            return ApiValidationProblem("stock_receive_invalid", "QuantityReceived must be greater than zero.");
         }
 
         var stockItem = await LoadStockItemAsync(id, cancellationToken);
         if (stockItem is null)
         {
-            return NotFound();
+            return ApiNotFound("stock_item_not_found", "Stock item was not found.");
         }
 
         var accessResult = await EnsurePharmacyAccessAsync(stockItem.PharmacyId, cancellationToken);
@@ -589,13 +589,13 @@ public class StocksController(
     {
         if (request.Quantity <= 0)
         {
-            return BadRequest("Quantity must be greater than zero.");
+            return ApiValidationProblem("stock_writeoff_invalid", "Quantity must be greater than zero.");
         }
 
         var stockItem = await LoadStockItemAsync(id, cancellationToken);
         if (stockItem is null)
         {
-            return NotFound();
+            return ApiNotFound("stock_item_not_found", "Stock item was not found.");
         }
 
         var accessResult = await EnsurePharmacyAccessAsync(stockItem.PharmacyId, cancellationToken);
@@ -606,7 +606,7 @@ public class StocksController(
 
         if (request.Quantity > stockItem.AvailableQuantity)
         {
-            return BadRequest("Write-off quantity cannot exceed currently available stock.");
+            return ApiValidationProblem("stock_writeoff_exceeds_available", "Write-off quantity cannot exceed currently available stock.");
         }
 
         var wasLowStock = stockItem.IsLowStock;
@@ -648,7 +648,7 @@ public class StocksController(
 
         if (validationError is not null)
         {
-            return BadRequest(validationError);
+            return ApiValidationProblem("stock_validation_error", validationError);
         }
 
         var stockItem = await context.StockItems
@@ -658,7 +658,7 @@ public class StocksController(
 
         if (stockItem is null)
         {
-            return NotFound();
+            return ApiNotFound("stock_item_not_found", "Stock item was not found.");
         }
 
         var accessResult = await EnsurePharmacyAccessAsync(stockItem.PharmacyId, cancellationToken);
@@ -669,7 +669,7 @@ public class StocksController(
 
         if (request.Quantity < stockItem.ReservedQuantity)
         {
-            return BadRequest("Quantity cannot be lower than the currently reserved quantity.");
+            return ApiValidationProblem("stock_quantity_reserved_conflict", "Quantity cannot be lower than the currently reserved quantity.");
         }
 
         var wasLowStock = stockItem.IsLowStock;
@@ -688,7 +688,7 @@ public class StocksController(
         }
         catch (DbUpdateConcurrencyException)
         {
-            return Conflict("Stock item changed while updating inventory. Please refresh and try again.");
+            return ApiConflict("stock_concurrency_conflict", "Stock item changed while updating inventory. Please refresh and try again.");
         }
 
         await cacheService.BumpScopeVersionAsync(CacheScopes.MedicinesSearch, cancellationToken);
@@ -735,7 +735,7 @@ public class StocksController(
 
         if (!currentUserService.UserId.HasValue)
         {
-            return Unauthorized();
+            return ApiUnauthorized();
         }
 
         var currentUser = await context.Users
@@ -744,7 +744,7 @@ public class StocksController(
 
         if (currentUser is null || currentUser.PharmacyId != pharmacyId)
         {
-            return Forbid();
+            return ApiForbidden("You do not have access to this pharmacy inventory.");
         }
 
         return null;
@@ -821,7 +821,7 @@ public class StocksController(
         }
         catch (DbUpdateConcurrencyException)
         {
-            return Conflict("Stock item changed while updating inventory. Please refresh and try again.");
+            return ApiConflict("stock_concurrency_conflict", "Stock item changed while updating inventory. Please refresh and try again.");
         }
 
         await cacheService.BumpScopeVersionAsync(CacheScopes.MedicinesSearch, cancellationToken);

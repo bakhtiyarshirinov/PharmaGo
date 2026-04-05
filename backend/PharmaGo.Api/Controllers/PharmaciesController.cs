@@ -16,7 +16,7 @@ public class PharmaciesController(
     IPharmacyDiscoveryService pharmacyDiscoveryService,
     IPharmacyCatalogService pharmacyCatalogService,
     IPharmacyConsumerService pharmacyConsumerService,
-    ICurrentUserService currentUserService) : ControllerBase
+    ICurrentUserService currentUserService) : ApiControllerBase
 {
     [HttpGet("search")]
     [ProducesResponseType(typeof(PagedResponse<NearbyPharmacyResponse>), StatusCodes.Status200OK)]
@@ -28,7 +28,7 @@ public class PharmaciesController(
         if ((request.Latitude.HasValue && !request.Longitude.HasValue) ||
             (!request.Latitude.HasValue && request.Longitude.HasValue))
         {
-            return BadRequest("Latitude and Longitude must be provided together.");
+            return ApiValidationProblem("geo_coordinates_incomplete", "Latitude and Longitude must be provided together.");
         }
 
         var response = await pharmacyDiscoveryService.SearchAsync(request, cancellationToken);
@@ -45,7 +45,7 @@ public class PharmaciesController(
     {
         if (string.IsNullOrWhiteSpace(q))
         {
-            return BadRequest("Query is required.");
+            return ApiValidationProblem("pharmacy_suggestions_query_required", "Query is required.");
         }
 
         var response = await pharmacyDiscoveryService.SuggestAsync(q, limit == 0 ? 8 : limit, cancellationToken);
@@ -62,12 +62,12 @@ public class PharmaciesController(
         if ((request.Latitude.HasValue && !request.Longitude.HasValue) ||
             (!request.Latitude.HasValue && request.Longitude.HasValue))
         {
-            return BadRequest("Latitude and Longitude must be provided together.");
+            return ApiValidationProblem("geo_coordinates_incomplete", "Latitude and Longitude must be provided together.");
         }
 
         if (!request.Latitude.HasValue || !request.Longitude.HasValue)
         {
-            return BadRequest("Latitude and Longitude are required.");
+            return ApiValidationProblem("geo_coordinates_required", "Latitude and Longitude are required.");
         }
 
         var response = await pharmacyDiscoveryService.GetMapAsync(request, cancellationToken);
@@ -101,13 +101,13 @@ public class PharmaciesController(
         if ((latitude.HasValue && !longitude.HasValue) ||
             (!latitude.HasValue && longitude.HasValue))
         {
-            return BadRequest("Latitude and Longitude must be provided together.");
+            return ApiValidationProblem("geo_coordinates_incomplete", "Latitude and Longitude must be provided together.");
         }
 
         var response = await pharmacyCatalogService.GetByIdAsync(id, latitude, longitude, cancellationToken);
         if (response is null)
         {
-            return NotFound();
+            return ApiNotFound("pharmacy_not_found", "Pharmacy was not found.");
         }
 
         if (currentUserService.UserId.HasValue)
@@ -127,6 +127,6 @@ public class PharmaciesController(
         CancellationToken cancellationToken)
     {
         var response = await pharmacyCatalogService.GetMedicinesAsync(id, request, cancellationToken);
-        return response is null ? NotFound() : Ok(response);
+        return response is null ? ApiNotFound("pharmacy_not_found", "Pharmacy was not found.") : Ok(response);
     }
 }

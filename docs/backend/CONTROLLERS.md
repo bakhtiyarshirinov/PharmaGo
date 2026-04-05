@@ -264,6 +264,7 @@ Endpoints:
   - updates notification delivery preferences for reservation lifecycle events
 
 Important details:
+- common controller-level validation, auth, forbidden and not-found failures now return problem-details payloads with stable `code` extensions
 - validates requested quantities and reservation lifetime
 - returns problem-details payloads for idempotency conflicts, stock conflicts and invalid lifecycle transitions
 - reserves from the earliest-expiring stock first

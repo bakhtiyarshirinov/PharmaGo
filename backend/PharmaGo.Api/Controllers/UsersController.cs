@@ -21,7 +21,7 @@ public class UsersController(
     IAuditService auditService,
     ICurrentUserService currentUserService,
     IPasswordHasher<AppUser> passwordHasher,
-    IRefreshTokenService refreshTokenService) : ControllerBase
+    IRefreshTokenService refreshTokenService) : ApiControllerBase
 {
     [HttpGet]
     [ProducesResponseType(typeof(PagedResponse<UserManagementResponse>), StatusCodes.Status200OK)]
@@ -110,7 +110,7 @@ public class UsersController(
         var user = await ProjectUsers()
             .FirstOrDefaultAsync(x => x.Id == id, cancellationToken);
 
-        return user is null ? NotFound() : Ok(user);
+        return user is null ? ApiNotFound("user_not_found", "User was not found.") : Ok(user);
     }
 
     [HttpPost]
@@ -132,13 +132,13 @@ public class UsersController(
 
         if (await context.Users.AnyAsync(x => x.PhoneNumber == normalizedPhone, cancellationToken))
         {
-            return BadRequest("A user with this phone number already exists.");
+            return ApiConflict("user_phone_already_exists", "A user with this phone number already exists.");
         }
 
         if (!string.IsNullOrWhiteSpace(normalizedEmail) &&
             await context.Users.AnyAsync(x => x.Email == normalizedEmail, cancellationToken))
         {
-            return BadRequest("A user with this email already exists.");
+            return ApiConflict("user_email_already_exists", "A user with this email already exists.");
         }
 
         var user = new AppUser
@@ -188,7 +188,7 @@ public class UsersController(
         var user = await context.Users.FirstOrDefaultAsync(x => x.Id == id, cancellationToken);
         if (user is null)
         {
-            return NotFound();
+            return ApiNotFound("user_not_found", "User was not found.");
         }
 
         var validationError = await ValidateRoleAndPharmacyAsync(request.Role, request.PharmacyId, cancellationToken);
@@ -202,13 +202,13 @@ public class UsersController(
 
         if (await context.Users.AnyAsync(x => x.Id != id && x.PhoneNumber == normalizedPhone, cancellationToken))
         {
-            return BadRequest("A user with this phone number already exists.");
+            return ApiConflict("user_phone_already_exists", "A user with this phone number already exists.");
         }
 
         if (!string.IsNullOrWhiteSpace(normalizedEmail) &&
             await context.Users.AnyAsync(x => x.Id != id && x.Email == normalizedEmail, cancellationToken))
         {
-            return BadRequest("A user with this email already exists.");
+            return ApiConflict("user_email_already_exists", "A user with this email already exists.");
         }
 
         user.FirstName = request.FirstName.Trim();
@@ -254,12 +254,12 @@ public class UsersController(
         var user = await context.Users.FirstOrDefaultAsync(x => x.Id == id, cancellationToken);
         if (user is null)
         {
-            return NotFound();
+            return ApiNotFound("user_not_found", "User was not found.");
         }
 
         if (user.Id == currentUserService.UserId)
         {
-            return BadRequest("Moderator cannot deactivate the current account.");
+            return ApiValidationProblem("user_deactivation_invalid", "Moderator cannot deactivate the current account.");
         }
 
         if (!user.IsActive)
@@ -293,7 +293,7 @@ public class UsersController(
         var user = await context.Users.FirstOrDefaultAsync(x => x.Id == id, cancellationToken);
         if (user is null)
         {
-            return NotFound();
+            return ApiNotFound("user_not_found", "User was not found.");
         }
 
         user.IsActive = true;
@@ -345,26 +345,26 @@ public class UsersController(
     {
         if (role == UserRole.Moderator)
         {
-            return BadRequest("Moderator accounts cannot be created or updated from this endpoint.");
+            return ApiValidationProblem("user_role_assignment_invalid", "Moderator accounts cannot be created or updated from this endpoint.");
         }
 
         if (role == UserRole.Pharmacist)
         {
             if (!pharmacyId.HasValue)
             {
-                return BadRequest("PharmacyId is required for pharmacist accounts.");
+                return ApiValidationProblem("user_pharmacy_required", "PharmacyId is required for pharmacist accounts.");
             }
 
             var pharmacyExists = await context.Pharmacies.AnyAsync(x => x.Id == pharmacyId.Value && x.IsActive, cancellationToken);
             if (!pharmacyExists)
             {
-                return NotFound("Pharmacy was not found.");
+                return ApiNotFound("pharmacy_not_found", "Pharmacy was not found.");
             }
         }
 
         if (role == UserRole.User && pharmacyId.HasValue)
         {
-            return BadRequest("Regular users cannot be assigned to a pharmacy.");
+            return ApiValidationProblem("user_pharmacy_assignment_invalid", "Regular users cannot be assigned to a pharmacy.");
         }
 
         return null;

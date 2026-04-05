@@ -1,7 +1,9 @@
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Diagnostics.HealthChecks;
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.OpenApi.Models;
 using PharmaGo.Api.Background;
+using PharmaGo.Api.Controllers;
 using PharmaGo.Api.Hubs;
 using PharmaGo.Api.Realtime;
 using PharmaGo.Api.Services;
@@ -15,6 +17,24 @@ const string FrontendCorsPolicy = "FrontendDev";
 builder.Services.AddInfrastructure(builder.Configuration);
 builder.Services.AddProblemDetails();
 builder.Services.AddControllers();
+builder.Services.Configure<ApiBehaviorOptions>(options =>
+{
+    options.InvalidModelStateResponseFactory = context =>
+    {
+        var problem = ApiProblemDetailsFactory.CreateValidationProblem(
+            "validation_error",
+            "One or more validation errors occurred.");
+
+        foreach (var entry in context.ModelState.Where(x => x.Value?.Errors.Count > 0))
+        {
+            problem.Errors[entry.Key] = entry.Value!.Errors
+                .Select(error => string.IsNullOrWhiteSpace(error.ErrorMessage) ? "Invalid value." : error.ErrorMessage)
+                .ToArray();
+        }
+
+        return new BadRequestObjectResult(problem);
+    };
+});
 builder.Services.AddSignalR();
 builder.Services.AddScoped<RealtimeNotificationService>();
 builder.Services.AddScoped<IReservationNotificationService, ReservationNotificationService>();

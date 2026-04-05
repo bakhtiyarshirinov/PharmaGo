@@ -15,7 +15,7 @@ public class MedicinesController(
     IMedicineCatalogService medicineCatalogService,
     IMedicineAvailabilityService medicineAvailabilityService,
     IMedicineConsumerService medicineConsumerService,
-    ICurrentUserService currentUserService) : ControllerBase
+    ICurrentUserService currentUserService) : ApiControllerBase
 {
     [HttpGet("search")]
     [ProducesResponseType(typeof(IReadOnlyCollection<MedicineSearchResponse>), StatusCodes.Status200OK)]
@@ -26,13 +26,13 @@ public class MedicinesController(
     {
         if (string.IsNullOrWhiteSpace(request.Query))
         {
-            return BadRequest("Search query is required.");
+            return ApiValidationProblem("medicine_search_query_required", "Search query is required.");
         }
 
         if ((request.Latitude.HasValue && !request.Longitude.HasValue) ||
             (!request.Latitude.HasValue && request.Longitude.HasValue))
         {
-            return BadRequest("Latitude and Longitude must be provided together.");
+            return ApiValidationProblem("geo_coordinates_incomplete", "Latitude and Longitude must be provided together.");
         }
 
         var medicines = await medicineSearchService.SearchAsync(request, cancellationToken);
@@ -49,7 +49,7 @@ public class MedicinesController(
     {
         if (string.IsNullOrWhiteSpace(q))
         {
-            return BadRequest("Query is required.");
+            return ApiValidationProblem("medicine_suggestions_query_required", "Query is required.");
         }
 
         var response = await medicineSearchService.SuggestAsync(q, limit == 0 ? 8 : limit, cancellationToken);
@@ -80,7 +80,7 @@ public class MedicinesController(
         var response = await medicineCatalogService.GetByIdAsync(id, cancellationToken);
         if (response is null)
         {
-            return NotFound();
+            return ApiNotFound("medicine_not_found", "Medicine was not found.");
         }
 
         if (currentUserService.UserId.HasValue)
@@ -100,7 +100,7 @@ public class MedicinesController(
         CancellationToken cancellationToken)
     {
         var response = await medicineCatalogService.GetSubstitutionsAsync(id, limit == 0 ? 10 : limit, cancellationToken);
-        return response is null ? NotFound("Medicine was not found.") : Ok(response);
+        return response is null ? ApiNotFound("medicine_not_found", "Medicine was not found.") : Ok(response);
     }
 
     [HttpGet("{id:guid}/similar")]
@@ -112,7 +112,7 @@ public class MedicinesController(
         CancellationToken cancellationToken)
     {
         var response = await medicineCatalogService.GetSimilarAsync(id, limit == 0 ? 10 : limit, cancellationToken);
-        return response is null ? NotFound("Medicine was not found.") : Ok(response);
+        return response is null ? ApiNotFound("medicine_not_found", "Medicine was not found.") : Ok(response);
     }
 
     [HttpGet("{id:guid}/availability")]
@@ -127,7 +127,7 @@ public class MedicinesController(
         if ((request.Latitude.HasValue && !request.Longitude.HasValue) ||
             (!request.Latitude.HasValue && request.Longitude.HasValue))
         {
-            return BadRequest("Latitude and Longitude must be provided together.");
+            return ApiValidationProblem("geo_coordinates_incomplete", "Latitude and Longitude must be provided together.");
         }
 
         request.MedicineId = id;
@@ -135,7 +135,7 @@ public class MedicinesController(
         var response = await medicineAvailabilityService.GetAvailabilityAsync(request, cancellationToken);
         if (response is null)
         {
-            return NotFound("Medicine was not found.");
+            return ApiNotFound("medicine_not_found", "Medicine was not found.");
         }
 
         return Ok(response);

@@ -22,7 +22,7 @@ public class AuthController(
     IJwtTokenGenerator jwtTokenGenerator,
     IPasswordHasher<AppUser> passwordHasher,
     ICurrentUserService currentUserService,
-    IOptions<JwtSettings> jwtOptions) : ControllerBase
+    IOptions<JwtSettings> jwtOptions) : ApiControllerBase
 {
     private readonly JwtSettings _jwtSettings = jwtOptions.Value;
 
@@ -39,12 +39,12 @@ public class AuthController(
             string.IsNullOrWhiteSpace(request.PhoneNumber) ||
             string.IsNullOrWhiteSpace(request.Password))
         {
-            return BadRequest("FirstName, LastName, PhoneNumber and Password are required.");
+            return ApiValidationProblem("auth_register_required_fields", "FirstName, LastName, PhoneNumber and Password are required.");
         }
 
         if (request.Password.Length < 8)
         {
-            return BadRequest("Password must be at least 8 characters long.");
+            return ApiValidationProblem("auth_password_too_short", "Password must be at least 8 characters long.");
         }
 
         var normalizedPhone = request.PhoneNumber.Trim();
@@ -53,7 +53,7 @@ public class AuthController(
         var phoneExists = await context.Users.AnyAsync(x => x.PhoneNumber == normalizedPhone, cancellationToken);
         if (phoneExists)
         {
-            return BadRequest("A user with this phone number already exists.");
+            return ApiConflict("auth_phone_already_exists", "A user with this phone number already exists.");
         }
 
         if (!string.IsNullOrWhiteSpace(normalizedEmail))
@@ -61,7 +61,7 @@ public class AuthController(
             var emailExists = await context.Users.AnyAsync(x => x.Email == normalizedEmail, cancellationToken);
             if (emailExists)
             {
-                return BadRequest("A user with this email already exists.");
+                return ApiConflict("auth_email_already_exists", "A user with this email already exists.");
             }
         }
 
@@ -112,7 +112,7 @@ public class AuthController(
     {
         if (string.IsNullOrWhiteSpace(request.PhoneNumber) || string.IsNullOrWhiteSpace(request.Password))
         {
-            return BadRequest("PhoneNumber and Password are required.");
+            return ApiValidationProblem("auth_login_required_fields", "PhoneNumber and Password are required.");
         }
 
         var normalizedPhone = request.PhoneNumber.Trim();
@@ -123,13 +123,13 @@ public class AuthController(
 
         if (user is null)
         {
-            return Unauthorized("Invalid credentials.");
+            return ApiUnauthorized("Invalid credentials.");
         }
 
         var verificationResult = passwordHasher.VerifyHashedPassword(user, user.PasswordHash, request.Password);
         if (verificationResult is PasswordVerificationResult.Failed)
         {
-            return Unauthorized("Invalid credentials.");
+            return ApiUnauthorized("Invalid credentials.");
         }
 
         var issuedTokens = await refreshTokenService.CreateAsync(
@@ -149,7 +149,7 @@ public class AuthController(
     {
         if (!currentUserService.UserId.HasValue)
         {
-            return Unauthorized();
+            return ApiUnauthorized();
         }
 
         var user = await context.Users
@@ -169,7 +169,7 @@ public class AuthController(
             })
             .FirstOrDefaultAsync(cancellationToken);
 
-        return user is null ? Unauthorized() : Ok(user);
+        return user is null ? ApiUnauthorized("User session is no longer valid.") : Ok(user);
     }
 
     [Authorize(Policy = PolicyNames.ManageUsers)]
@@ -184,17 +184,17 @@ public class AuthController(
         var user = await context.Users.FirstOrDefaultAsync(x => x.Id == id, cancellationToken);
         if (user is null)
         {
-            return NotFound();
+            return ApiNotFound("user_not_found", "User was not found.");
         }
 
         if (request.Role == UserRole.Moderator)
         {
-            return BadRequest("Moderator role cannot be assigned from this endpoint.");
+            return ApiValidationProblem("user_role_assignment_invalid", "Moderator role cannot be assigned from this endpoint.");
         }
 
         if (request.Role == UserRole.Pharmacist && !user.PharmacyId.HasValue)
         {
-            return BadRequest("Pharmacist role requires a pharmacy assignment. Use the users management endpoint.");
+            return ApiValidationProblem("user_role_assignment_invalid", "Pharmacist role requires a pharmacy assignment. Use the users management endpoint.");
         }
 
         user.Role = request.Role;
@@ -236,12 +236,12 @@ public class AuthController(
         var refreshToken = await refreshTokenService.GetByTokenAsync(request.RefreshToken.Trim(), cancellationToken);
         if (refreshToken?.User is null || !refreshToken.User.IsActive)
         {
-            return Unauthorized("Invalid refresh token.");
+            return ApiUnauthorized("Invalid refresh token.");
         }
 
         if (refreshToken.RevokedAtUtc is not null || refreshToken.ExpiresAtUtc <= DateTime.UtcNow)
         {
-            return Unauthorized("Refresh token is no longer active.");
+            return ApiUnauthorized("Refresh token is no longer active.");
         }
 
         var replacement = await refreshTokenService.CreateAsync(
@@ -306,7 +306,7 @@ public class AuthController(
     {
         if (!currentUserService.UserId.HasValue)
         {
-            return Unauthorized();
+            return ApiUnauthorized();
         }
 
         await refreshTokenService.RevokeAllForUserAsync(currentUserService.UserId.Value, "revoke-all", cancellationToken);

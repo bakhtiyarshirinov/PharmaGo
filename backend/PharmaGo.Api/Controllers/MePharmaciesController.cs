@@ -10,7 +10,7 @@ namespace PharmaGo.Api.Controllers;
 [Authorize]
 public class MePharmaciesController(
     ICurrentUserService currentUserService,
-    IPharmacyConsumerService pharmacyConsumerService) : ControllerBase
+    IPharmacyConsumerService pharmacyConsumerService) : ApiControllerBase
 {
     [HttpGet("favorites")]
     [ProducesResponseType(typeof(IReadOnlyCollection<ConsumerPharmacyFeedItemResponse>), StatusCodes.Status200OK)]
@@ -20,7 +20,7 @@ public class MePharmaciesController(
     {
         if (!currentUserService.UserId.HasValue)
         {
-            return Unauthorized();
+            return ApiUnauthorized();
         }
 
         var response = await pharmacyConsumerService.GetFavoritesAsync(
@@ -38,7 +38,7 @@ public class MePharmaciesController(
     {
         if (!currentUserService.UserId.HasValue)
         {
-            return Unauthorized();
+            return ApiUnauthorized();
         }
 
         var added = await pharmacyConsumerService.AddFavoriteAsync(
@@ -46,7 +46,7 @@ public class MePharmaciesController(
             pharmacyId,
             cancellationToken);
 
-        return added ? NoContent() : NotFound("Pharmacy was not found.");
+        return added ? NoContent() : ApiNotFound("pharmacy_not_found", "Pharmacy was not found.");
     }
 
     [HttpDelete("favorites/{pharmacyId:guid}")]
@@ -56,7 +56,7 @@ public class MePharmaciesController(
     {
         if (!currentUserService.UserId.HasValue)
         {
-            return Unauthorized();
+            return ApiUnauthorized();
         }
 
         var removed = await pharmacyConsumerService.RemoveFavoriteAsync(
@@ -64,7 +64,7 @@ public class MePharmaciesController(
             pharmacyId,
             cancellationToken);
 
-        return removed ? NoContent() : NotFound("Pharmacy was not found.");
+        return removed ? NoContent() : ApiNotFound("pharmacy_not_found", "Pharmacy was not found.");
     }
 
     [HttpGet("recent")]
@@ -75,7 +75,7 @@ public class MePharmaciesController(
     {
         if (!currentUserService.UserId.HasValue)
         {
-            return Unauthorized();
+            return ApiUnauthorized();
         }
 
         var response = await pharmacyConsumerService.GetRecentAsync(

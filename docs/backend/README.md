@@ -98,6 +98,7 @@ Workflow rules:
 - Swagger UI is enabled in development environment
 - database health is included in `/health`
 - global exception handling is enabled through ASP.NET Core `ProblemDetails`
+- controller validation, auth and not-found errors now converge on a unified problem-details contract with stable `code` values
 - hot read endpoints use distributed cache versioning for safe invalidation
 - if `Redis:ConnectionString` is empty, the app falls back to in-memory distributed cache
 - inventory staff flows support explicit `adjust`, `receive` and `writeoff` commands in addition to the generic stock update endpoint

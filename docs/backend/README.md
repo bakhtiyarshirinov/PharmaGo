@@ -42,7 +42,8 @@ The backend solves four main business flows:
 - `UsersController`: moderator user management, pharmacist creation, soft delete and restore
 - `MedicinesController`: medicine catalog search, autocomplete, popular feed, medicine cards, substitutions, similar medicines and pharmacy availability
 - `MeMedicinesController`: authenticated consumer medicine feeds for favorites and recent views
-- `PharmaciesController`: nearby pharmacy discovery, map pins, autocomplete, pharmacy cards and pharmacy catalog browsing
+- `PharmaciesController`: nearby pharmacy discovery, map pins, autocomplete, popular feed, pharmacy cards and pharmacy catalog browsing
+- `MePharmaciesController`: authenticated consumer pharmacy feeds for favorites and recent views
 - `ReservationsController`: create reservation, active/timeline lookup and explicit lifecycle commands
 - `StocksController`: pharmacy stock CRUD, explicit inventory commands and operational stock alerts
 - `DashboardController`: summary metrics and recent reservations for staff dashboards

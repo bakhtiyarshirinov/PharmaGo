@@ -24,4 +24,6 @@ public class Pharmacy : BaseEntity
     public ICollection<StockItem> StockItems { get; set; } = new List<StockItem>();
     public ICollection<Reservation> Reservations { get; set; } = new List<Reservation>();
     public ICollection<AppUser> Employees { get; set; } = new List<AppUser>();
+    public ICollection<UserFavoritePharmacy> FavoritedByUsers { get; set; } = new List<UserFavoritePharmacy>();
+    public ICollection<UserPharmacyView> ViewedByUsers { get; set; } = new List<UserPharmacyView>();
 }

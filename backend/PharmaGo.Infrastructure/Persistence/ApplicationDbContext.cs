@@ -20,7 +20,9 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
     public DbSet<StockItem> StockItems => Set<StockItem>();
     public DbSet<SupplierMedicine> SupplierMedicines => Set<SupplierMedicine>();
     public DbSet<UserFavoriteMedicine> UserFavoriteMedicines => Set<UserFavoriteMedicine>();
+    public DbSet<UserFavoritePharmacy> UserFavoritePharmacies => Set<UserFavoritePharmacy>();
     public DbSet<UserMedicineView> UserMedicineViews => Set<UserMedicineView>();
+    public DbSet<UserPharmacyView> UserPharmacyViews => Set<UserPharmacyView>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

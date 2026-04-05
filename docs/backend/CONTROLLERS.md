@@ -125,6 +125,9 @@ Endpoint:
   - public
   - returns lightweight map pin data
   - supports `latitude`, `longitude`, `radiusKm`, `query`, `medicineQuery`, `openNow`, `supportsReservations`, `hasDelivery` and `limit`
+- `GET /api/pharmacies/popular`
+  - public
+  - returns a popularity-ranked consumer feed based on reservations, favorites and availability
 - `GET /api/pharmacies/{id}`
   - public
   - returns pharmacy card with contacts, hours, services, support channels and stock summary
@@ -136,10 +139,36 @@ Endpoint:
 Important details:
 - returns distance when client coordinates are provided
 - evaluates `isOpenNow` from 24/7 flag or weekly opening-hours JSON
+- authenticated pharmacy card reads automatically update the user's recent-pharmacies feed
 - includes stock summary metrics per pharmacy for consumer discovery cards
 - includes a dedicated lightweight map contract so frontends do not need to use the heavier search response for pins
 - pharmacy catalog flow prevents search results from becoming a dead end by exposing medicine browsing inside a selected pharmacy
 - uses additive geo fields and does not break existing pharmacy data contracts
+
+## MePharmaciesController
+File: `backend/PharmaGo.Api/Controllers/MePharmaciesController.cs`
+
+Purpose:
+- gives authenticated users consumer-specific pharmacy feeds and favorite actions
+
+Endpoints:
+- `GET /api/me/pharmacies/favorites`
+  - authenticated
+  - returns the user's favorite pharmacies with availability summary
+- `POST /api/me/pharmacies/favorites/{pharmacyId}`
+  - authenticated
+  - idempotently adds a pharmacy to favorites
+- `DELETE /api/me/pharmacies/favorites/{pharmacyId}`
+  - authenticated
+  - idempotently removes a pharmacy from favorites
+- `GET /api/me/pharmacies/recent`
+  - authenticated
+  - returns recently viewed pharmacies ordered by last view time
+
+Important details:
+- favorites and recent feeds reuse live pharmacy availability summary metrics
+- recent pharmacy feed is driven by actual pharmacy-card views
+- favorite and recent tables are additive user-personalization storage and do not affect existing pharmacy contracts
 
 ## UsersController
 File: `backend/PharmaGo.Api/Controllers/UsersController.cs`

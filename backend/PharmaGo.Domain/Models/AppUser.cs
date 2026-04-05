@@ -18,7 +18,9 @@ public class AppUser : BaseEntity
     public Pharmacy? Pharmacy { get; set; }
 
     public ICollection<UserFavoriteMedicine> FavoriteMedicines { get; set; } = new List<UserFavoriteMedicine>();
+    public ICollection<UserFavoritePharmacy> FavoritePharmacies { get; set; } = new List<UserFavoritePharmacy>();
     public ICollection<UserMedicineView> MedicineViews { get; set; } = new List<UserMedicineView>();
+    public ICollection<UserPharmacyView> PharmacyViews { get; set; } = new List<UserPharmacyView>();
     public ICollection<Reservation> Reservations { get; set; } = new List<Reservation>();
     public ICollection<RefreshToken> RefreshTokens { get; set; } = new List<RefreshToken>();
 }

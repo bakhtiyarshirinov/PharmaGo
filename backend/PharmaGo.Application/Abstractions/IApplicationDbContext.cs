@@ -18,7 +18,9 @@ public interface IApplicationDbContext
     DbSet<StockItem> StockItems { get; }
     DbSet<SupplierMedicine> SupplierMedicines { get; }
     DbSet<UserFavoriteMedicine> UserFavoriteMedicines { get; }
+    DbSet<UserFavoritePharmacy> UserFavoritePharmacies { get; }
     DbSet<UserMedicineView> UserMedicineViews { get; }
+    DbSet<UserPharmacyView> UserPharmacyViews { get; }
 
     Task<int> SaveChangesAsync(CancellationToken cancellationToken = default);
 }

@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Mvc;
 using PharmaGo.Application.Abstractions;
 using PharmaGo.Application.Common.Contracts;
+using PharmaGo.Application.Pharmacies.Queries.GetConsumerPharmacyFeed;
 using PharmaGo.Application.Pharmacies.Queries.GetNearbyPharmacyMap;
 using PharmaGo.Application.Pharmacies.Queries.GetPharmacyDetail;
 using PharmaGo.Application.Pharmacies.Queries.GetPharmacyMedicines;
@@ -13,7 +14,9 @@ namespace PharmaGo.Api.Controllers;
 [Route("api/[controller]")]
 public class PharmaciesController(
     IPharmacyDiscoveryService pharmacyDiscoveryService,
-    IPharmacyCatalogService pharmacyCatalogService) : ControllerBase
+    IPharmacyCatalogService pharmacyCatalogService,
+    IPharmacyConsumerService pharmacyConsumerService,
+    ICurrentUserService currentUserService) : ControllerBase
 {
     [HttpGet("search")]
     [ProducesResponseType(typeof(PagedResponse<NearbyPharmacyResponse>), StatusCodes.Status200OK)]
@@ -71,6 +74,20 @@ public class PharmaciesController(
         return Ok(response);
     }
 
+    [HttpGet("popular")]
+    [ProducesResponseType(typeof(IReadOnlyCollection<ConsumerPharmacyFeedItemResponse>), StatusCodes.Status200OK)]
+    public async Task<ActionResult<IReadOnlyCollection<ConsumerPharmacyFeedItemResponse>>> Popular(
+        [FromQuery] int limit,
+        CancellationToken cancellationToken)
+    {
+        var response = await pharmacyConsumerService.GetPopularAsync(
+            currentUserService.UserId,
+            limit == 0 ? 10 : limit,
+            cancellationToken);
+
+        return Ok(response);
+    }
+
     [HttpGet("{id:guid}")]
     [ProducesResponseType(typeof(PharmacyDetailResponse), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
@@ -88,7 +105,17 @@ public class PharmaciesController(
         }
 
         var response = await pharmacyCatalogService.GetByIdAsync(id, latitude, longitude, cancellationToken);
-        return response is null ? NotFound() : Ok(response);
+        if (response is null)
+        {
+            return NotFound();
+        }
+
+        if (currentUserService.UserId.HasValue)
+        {
+            await pharmacyConsumerService.RecordViewAsync(currentUserService.UserId.Value, id, cancellationToken);
+        }
+
+        return Ok(response);
     }
 
     [HttpGet("{id:guid}/medicines")]

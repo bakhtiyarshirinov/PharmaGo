@@ -14,6 +14,7 @@ public interface IApplicationDbContext
     DbSet<PharmacyChain> PharmacyChains { get; }
     DbSet<RefreshToken> RefreshTokens { get; }
     DbSet<Reservation> Reservations { get; }
+    DbSet<ReservationIdempotencyRecord> ReservationIdempotencyRecords { get; }
     DbSet<ReservationItem> ReservationItems { get; }
     DbSet<StockItem> StockItems { get; }
     DbSet<SupplierMedicine> SupplierMedicines { get; }

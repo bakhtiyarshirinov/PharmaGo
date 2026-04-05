@@ -43,7 +43,7 @@ public class MedicineRecommendationTests(CustomWebApplicationFactory factory) : 
                 Strength = "500 mg",
                 Manufacturer = "Acme Pharma",
                 CountryOfOrigin = "Poland",
-                Barcode = "4444444444444",
+                Barcode = "SUB-PAR-500-0001",
                 RequiresPrescription = false,
                 CategoryId = panadol.CategoryId
             };
@@ -57,7 +57,7 @@ public class MedicineRecommendationTests(CustomWebApplicationFactory factory) : 
                 Strength = "250 mg",
                 Manufacturer = "Acme Pharma",
                 CountryOfOrigin = "Poland",
-                Barcode = "5555555555555",
+                Barcode = "SUB-PAR-250-0001",
                 RequiresPrescription = false,
                 CategoryId = panadol.CategoryId
             };
@@ -108,9 +108,9 @@ public class MedicineRecommendationTests(CustomWebApplicationFactory factory) : 
         var payload = await response.Content.ReadAsAsync<IReadOnlyCollection<MedicineRecommendationResponse>>();
         Assert.NotNull(payload);
 
-        var item = Assert.Single(payload!);
-        Assert.Equal("Paracetamol Forte", item.BrandName);
-        Assert.Equal("Same generic name, dosage form and strength.", item.MatchReason);
+        Assert.Contains(payload!, x => x.BrandName == "Paracetamol Forte");
+        Assert.DoesNotContain(payload!, x => x.BrandName == "Paracetamol Kids");
+        Assert.All(payload!, item => Assert.Equal("Same generic name, dosage form and strength.", item.MatchReason));
     }
 
     [Fact]

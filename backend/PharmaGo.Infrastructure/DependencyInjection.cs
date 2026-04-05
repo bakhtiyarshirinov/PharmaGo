@@ -63,6 +63,7 @@ public static class DependencyInjection
         services.AddScoped<IMedicineAvailabilityService, MedicineAvailabilityService>();
         services.AddScoped<IPasswordHasher<AppUser>, PasswordHasher<AppUser>>();
         services.AddScoped<IReservationStateService, ReservationStateService>();
+        services.AddScoped<IReservationTransitionPolicy, ReservationTransitionPolicy>();
 
         services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
             .AddJwtBearer(options =>

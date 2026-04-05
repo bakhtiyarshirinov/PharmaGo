@@ -16,6 +16,7 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
     public DbSet<PharmacyChain> PharmacyChains => Set<PharmacyChain>();
     public DbSet<RefreshToken> RefreshTokens => Set<RefreshToken>();
     public DbSet<Reservation> Reservations => Set<Reservation>();
+    public DbSet<ReservationIdempotencyRecord> ReservationIdempotencyRecords => Set<ReservationIdempotencyRecord>();
     public DbSet<ReservationItem> ReservationItems => Set<ReservationItem>();
     public DbSet<StockItem> StockItems => Set<StockItem>();
     public DbSet<SupplierMedicine> SupplierMedicines => Set<SupplierMedicine>();

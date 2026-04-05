@@ -67,7 +67,10 @@ builder.Services.AddSwaggerGen(options =>
 
 var app = builder.Build();
 
-await app.Services.InitializeDatabaseAsync();
+if (!app.Environment.IsEnvironment("Testing"))
+{
+    await app.Services.InitializeDatabaseAsync();
+}
 
 app.UseExceptionHandler();
 

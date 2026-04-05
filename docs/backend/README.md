@@ -82,6 +82,8 @@ Workflow rules:
 
 - customer can cancel own active reservation
 - pharmacist or moderator can confirm, mark ready for pickup, complete or expire reservations
+- `POST /api/reservations` supports optional `Idempotency-Key` header for retry-safe create
+- invalid lifecycle transitions now return `422 Unprocessable Entity` with problem details payload
 - background worker expires overdue reservations automatically
 - stock is released on `Cancelled` and `Expired`
 - stock is deducted on `Completed`

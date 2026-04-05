@@ -236,6 +236,7 @@ Endpoints:
   - authenticated
   - creates reservation against available stock in selected pharmacy
   - reserves stock immediately
+  - accepts optional `Idempotency-Key` header for safe client retries
 - `POST /api/reservations/{id}/confirm`
   - pharmacist or moderator
   - explicitly confirms reservation when workflow starts from `Pending`
@@ -258,8 +259,10 @@ Endpoints:
 
 Important details:
 - validates requested quantities and reservation lifetime
+- returns problem-details payloads for idempotency conflicts, stock conflicts and invalid lifecycle transitions
 - reserves from the earliest-expiring stock first
 - wraps reservation writes in database transactions and detects concurrent stock changes
+- persists reservation create idempotency keys per user to prevent duplicate bookings on retry
 - active reservations exclude already elapsed holds even if background expiration has not run yet
 - timeline is built from reservation audit events and exposes actor, description and resolved status
 - sends SignalR events on create and status changes
@@ -267,6 +270,7 @@ Important details:
 - writes audit records for create and status transitions
 - uses explicit audit actions such as `reservation.cancelled`, `reservation.completed` and `reservation.expired`
 - delegates stock release and completion rules to `IReservationStateService`
+- delegates transition permissions and allowed state changes to `IReservationTransitionPolicy`
 - dashboard and medicine-search caches are invalidated on reservation writes and automatic expiration
 
 ## StocksController

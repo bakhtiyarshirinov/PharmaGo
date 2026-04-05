@@ -1,6 +1,7 @@
 using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using PharmaGo.Application.Auth.Contracts;
@@ -69,6 +70,125 @@ public class ReservationFlowTests(CustomWebApplicationFactory factory) : IClassF
 
         var updatedStock = await db.StockItems.AsNoTracking().FirstAsync(x => x.Id == stockItem.Id);
         Assert.Equal(2, updatedStock.ReservedQuantity);
+    }
+
+    [Fact]
+    public async Task CreateReservation_WithSameIdempotencyKey_ShouldReplaySameReservation()
+    {
+        using var scope = factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+        var pharmacy = await db.Pharmacies.FirstAsync(x => x.Name == "PharmaGo Central");
+        var stockItem = await db.StockItems.Include(x => x.Medicine).FirstAsync(x => x.PharmacyId == pharmacy.Id && x.Quantity >= 4);
+
+        var auth = await RegisterAndAuthorizeAsync(_client, "+994551110015", "idempotent@example.com");
+        Assert.NotNull(auth);
+
+        var request = new CreateReservationRequest
+        {
+            PharmacyId = pharmacy.Id,
+            ReserveForHours = 2,
+            Items =
+            [
+                new CreateReservationItemRequest
+                {
+                    MedicineId = stockItem.MedicineId,
+                    Quantity = 2
+                }
+            ]
+        };
+
+        var firstRequest = new HttpRequestMessage(HttpMethod.Post, "/api/reservations")
+        {
+            Content = JsonContent.Create(request)
+        };
+        firstRequest.Headers.Add("Idempotency-Key", "reservation-create-001");
+
+        var secondRequest = new HttpRequestMessage(HttpMethod.Post, "/api/reservations")
+        {
+            Content = JsonContent.Create(request)
+        };
+        secondRequest.Headers.Add("Idempotency-Key", "reservation-create-001");
+
+        var firstResponse = await _client.SendAsync(firstRequest);
+        var secondResponse = await _client.SendAsync(secondRequest);
+
+        Assert.Equal(HttpStatusCode.Created, firstResponse.StatusCode);
+        Assert.Equal(HttpStatusCode.OK, secondResponse.StatusCode);
+        Assert.Equal("true", secondResponse.Headers.GetValues("X-Idempotent-Replay").Single());
+
+        var firstPayload = await firstResponse.Content.ReadAsAsync<ReservationResponse>();
+        var secondPayload = await secondResponse.Content.ReadAsAsync<ReservationResponse>();
+
+        Assert.NotNull(firstPayload);
+        Assert.NotNull(secondPayload);
+        Assert.Equal(firstPayload!.ReservationId, secondPayload!.ReservationId);
+
+        var reservationCount = await db.Reservations.AsNoTracking()
+            .CountAsync(x => x.CustomerId == firstPayload.CustomerId);
+
+        Assert.Equal(1, reservationCount);
+    }
+
+    [Fact]
+    public async Task CreateReservation_WithSameIdempotencyKeyAndDifferentPayload_ShouldReturnConflictProblem()
+    {
+        using var scope = factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+        var pharmacy = await db.Pharmacies.FirstAsync(x => x.Name == "PharmaGo Central");
+        var stockItems = await db.StockItems
+            .Where(x => x.PharmacyId == pharmacy.Id && x.Quantity >= 3)
+            .Take(2)
+            .ToListAsync();
+
+        var auth = await RegisterAndAuthorizeAsync(_client, "+994551110016", "idempotent-conflict@example.com");
+        Assert.NotNull(auth);
+
+        var firstRequest = new HttpRequestMessage(HttpMethod.Post, "/api/reservations")
+        {
+            Content = JsonContent.Create(new CreateReservationRequest
+            {
+                PharmacyId = pharmacy.Id,
+                ReserveForHours = 2,
+                Items =
+                [
+                    new CreateReservationItemRequest
+                    {
+                        MedicineId = stockItems[0].MedicineId,
+                        Quantity = 1
+                    }
+                ]
+            })
+        };
+        firstRequest.Headers.Add("Idempotency-Key", "reservation-create-002");
+
+        var secondRequest = new HttpRequestMessage(HttpMethod.Post, "/api/reservations")
+        {
+            Content = JsonContent.Create(new CreateReservationRequest
+            {
+                PharmacyId = pharmacy.Id,
+                ReserveForHours = 2,
+                Items =
+                [
+                    new CreateReservationItemRequest
+                    {
+                        MedicineId = stockItems[1].MedicineId,
+                        Quantity = 1
+                    }
+                ]
+            })
+        };
+        secondRequest.Headers.Add("Idempotency-Key", "reservation-create-002");
+
+        var firstResponse = await _client.SendAsync(firstRequest);
+        var secondResponse = await _client.SendAsync(secondRequest);
+
+        Assert.Equal(HttpStatusCode.Created, firstResponse.StatusCode);
+        Assert.Equal(HttpStatusCode.Conflict, secondResponse.StatusCode);
+
+        var problem = await secondResponse.Content.ReadFromJsonAsync<ProblemDetails>();
+        Assert.NotNull(problem);
+        Assert.Equal("This idempotency key has already been used with a different reservation payload.", problem!.Detail);
+        Assert.Equal("reservation_idempotency_conflict", problem.Extensions["code"]?.ToString());
     }
 
     [Fact]
@@ -194,6 +314,38 @@ public class ReservationFlowTests(CustomWebApplicationFactory factory) : IClassF
     }
 
     [Fact]
+    public async Task User_ShouldNotCompleteOwnReservation()
+    {
+        using var scope = factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+        var pharmacy = await db.Pharmacies.FirstAsync(x => x.Name == "PharmaGo Central");
+        var stockItem = await db.StockItems.FirstAsync(x => x.PharmacyId == pharmacy.Id && x.Quantity >= 1);
+
+        var auth = await RegisterAndAuthorizeAsync(_client, "+994551110017", "cannot-complete@example.com");
+        Assert.NotNull(auth);
+
+        var createResponse = await _client.PostAsJsonAsync("/api/reservations", new CreateReservationRequest
+        {
+            PharmacyId = pharmacy.Id,
+            ReserveForHours = 2,
+            Items =
+            [
+                new CreateReservationItemRequest
+                {
+                    MedicineId = stockItem.MedicineId,
+                    Quantity = 1
+                }
+            ]
+        });
+
+        var reservation = await createResponse.Content.ReadAsAsync<ReservationResponse>();
+        Assert.NotNull(reservation);
+
+        var completeResponse = await _client.PostAsync($"/api/reservations/{reservation!.ReservationId}/complete", content: null);
+        Assert.Equal(HttpStatusCode.Forbidden, completeResponse.StatusCode);
+    }
+
+    [Fact]
     public async Task Active_ShouldReturnOnlyCurrentUserOpenReservations()
     {
         using var scope = factory.Services.CreateScope();
@@ -312,6 +464,56 @@ public class ReservationFlowTests(CustomWebApplicationFactory factory) : IClassF
     }
 
     [Fact]
+    public async Task CancelledReservation_ShouldNotBeConfirmedAgain()
+    {
+        using var scope = factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+        var pharmacy = await db.Pharmacies.FirstAsync(x => x.Name == "PharmaGo Central");
+        var stockItem = await db.StockItems.FirstAsync(x => x.PharmacyId == pharmacy.Id && x.Quantity >= 1);
+
+        var auth = await RegisterAndAuthorizeAsync(_client, "+994551110018", "transition-invalid@example.com");
+        Assert.NotNull(auth);
+
+        var createResponse = await _client.PostAsJsonAsync("/api/reservations", new CreateReservationRequest
+        {
+            PharmacyId = pharmacy.Id,
+            ReserveForHours = 2,
+            Items =
+            [
+                new CreateReservationItemRequest
+                {
+                    MedicineId = stockItem.MedicineId,
+                    Quantity = 1
+                }
+            ]
+        });
+
+        var reservation = await createResponse.Content.ReadAsAsync<ReservationResponse>();
+        Assert.NotNull(reservation);
+
+        var cancelResponse = await _client.PostAsync($"/api/reservations/{reservation!.ReservationId}/cancel", content: null);
+        Assert.Equal(HttpStatusCode.OK, cancelResponse.StatusCode);
+
+        var pharmacistLogin = await _client.PostAsJsonAsync("/api/auth/login", new LoginRequest
+        {
+            PhoneNumber = "+994500000001",
+            Password = "Pharmacist123!"
+        });
+
+        var pharmacistAuth = await pharmacistLogin.Content.ReadAsAsync<AuthResponse>();
+        Assert.NotNull(pharmacistAuth);
+
+        _client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", pharmacistAuth!.AccessToken);
+
+        var confirmResponse = await _client.PostAsync($"/api/reservations/{reservation.ReservationId}/confirm", content: null);
+        Assert.Equal((HttpStatusCode)422, confirmResponse.StatusCode);
+
+        var problem = await confirmResponse.Content.ReadFromJsonAsync<ProblemDetails>();
+        Assert.NotNull(problem);
+        Assert.Equal("reservation_transition_invalid", problem!.Extensions["code"]?.ToString());
+    }
+
+    [Fact]
     public async Task Pharmacist_ShouldGetRestockSuggestions_ForOwnPharmacy()
     {
         using (var scope = factory.Services.CreateScope())
@@ -406,7 +608,8 @@ public class ReservationFlowTests(CustomWebApplicationFactory factory) : IClassF
         var createdCount = responses.Count(x => x.StatusCode == HttpStatusCode.Created);
         var rejectedCount = responses.Count(x =>
             x.StatusCode == HttpStatusCode.Conflict ||
-            x.StatusCode == HttpStatusCode.BadRequest);
+            x.StatusCode == HttpStatusCode.BadRequest ||
+            x.StatusCode == (HttpStatusCode)422);
 
         Assert.Equal(1, createdCount);
         Assert.Equal(1, rejectedCount);

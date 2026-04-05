@@ -2,6 +2,8 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Npgsql;
+using System.Security.Cryptography;
+using System.Text;
 using System.Text.Json;
 using PharmaGo.Api.Realtime;
 using PharmaGo.Application.Abstractions;
@@ -26,8 +28,11 @@ public class ReservationsController(
     IAuditService auditService,
     ICurrentUserService currentUserService,
     IReservationStateService reservationStateService,
+    IReservationTransitionPolicy reservationTransitionPolicy,
     RealtimeNotificationService realtimeNotificationService) : ControllerBase
 {
+    private const string IdempotencyKeyHeaderName = "Idempotency-Key";
+
     [Authorize(Policy = PolicyNames.ReadOwnReservations)]
     [HttpGet("my")]
     [ProducesResponseType(typeof(IReadOnlyCollection<ReservationResponse>), StatusCodes.Status200OK)]
@@ -226,30 +231,58 @@ public class ReservationsController(
     [ProducesResponseType(typeof(ReservationResponse), StatusCodes.Status201Created)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status409Conflict)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status422UnprocessableEntity)]
     public async Task<ActionResult<ReservationResponse>> Create(
         [FromBody] CreateReservationRequest request,
+        [FromHeader(Name = IdempotencyKeyHeaderName)] string? idempotencyKey,
         CancellationToken cancellationToken)
     {
         var dbContext = (ApplicationDbContext)context;
+        idempotencyKey = idempotencyKey?.Trim();
 
         if (request.Items.Count == 0)
         {
-            return BadRequest("At least one reservation item is required.");
+            return ValidationProblemResponse("reservation_validation_error", "At least one reservation item is required.");
         }
 
         if (request.Items.Any(item => item.Quantity <= 0))
         {
-            return BadRequest("Reservation item quantities must be greater than zero.");
+            return ValidationProblemResponse("reservation_validation_error", "Reservation item quantities must be greater than zero.");
         }
 
         if (request.ReserveForHours <= 0 || request.ReserveForHours > 24)
         {
-            return BadRequest("ReserveForHours must be between 1 and 24.");
+            return ValidationProblemResponse("reservation_validation_error", "ReserveForHours must be between 1 and 24.");
         }
 
         if (!currentUserService.UserId.HasValue)
         {
             return Unauthorized();
+        }
+
+        if (!string.IsNullOrWhiteSpace(idempotencyKey) && idempotencyKey.Length > 128)
+        {
+            return ValidationProblemResponse("reservation_validation_error", $"{IdempotencyKeyHeaderName} cannot exceed 128 characters.");
+        }
+
+        var requestHash = string.IsNullOrWhiteSpace(idempotencyKey)
+            ? null
+            : ComputeRequestHash(request);
+
+        if (!string.IsNullOrWhiteSpace(idempotencyKey))
+        {
+            var idempotentResponse = await TryResolveIdempotentCreateAsync(
+                currentUserService.UserId.Value,
+                idempotencyKey,
+                requestHash!,
+                cancellationToken);
+
+            if (idempotentResponse is not null)
+            {
+                Response.Headers.Append("X-Idempotent-Replay", "true");
+                return idempotentResponse;
+            }
         }
 
         try
@@ -258,18 +291,59 @@ public class ReservationsController(
             List<StockItem>? affectedStocks = null;
             Guid pharmacyId = Guid.Empty;
             Guid customerId = Guid.Empty;
+            ReservationIdempotencyRecord? idempotencyRecord = null;
 
             var strategy = dbContext.Database.CreateExecutionStrategy();
             await strategy.ExecuteAsync(async () =>
             {
                 await using var transaction = await dbContext.Database.BeginTransactionAsync(cancellationToken);
 
+                if (!string.IsNullOrWhiteSpace(idempotencyKey))
+                {
+                    idempotencyRecord = await context.ReservationIdempotencyRecords
+                        .FirstOrDefaultAsync(
+                            x => x.UserId == currentUserService.UserId.Value && x.IdempotencyKey == idempotencyKey,
+                            cancellationToken);
+
+                    if (idempotencyRecord is not null)
+                    {
+                        if (!string.Equals(idempotencyRecord.RequestHash, requestHash, StringComparison.Ordinal))
+                        {
+                            throw new ReservationRequestException(
+                                StatusCodes.Status409Conflict,
+                                "This idempotency key has already been used with a different reservation payload.",
+                                "reservation_idempotency_conflict");
+                        }
+
+                        if (idempotencyRecord.ReservationId.HasValue)
+                        {
+                            await transaction.RollbackAsync(cancellationToken);
+                            return;
+                        }
+
+                        throw new ReservationRequestException(
+                            StatusCodes.Status409Conflict,
+                            "A reservation request with the same idempotency key is already being processed.",
+                            "reservation_idempotency_in_progress");
+                    }
+
+                    idempotencyRecord = new ReservationIdempotencyRecord
+                    {
+                        UserId = currentUserService.UserId.Value,
+                        IdempotencyKey = idempotencyKey,
+                        RequestHash = requestHash!
+                    };
+
+                    await context.ReservationIdempotencyRecords.AddAsync(idempotencyRecord, cancellationToken);
+                    await context.SaveChangesAsync(cancellationToken);
+                }
+
                 var pharmacy = await context.Pharmacies
                     .FirstOrDefaultAsync(x => x.Id == request.PharmacyId && x.IsActive, cancellationToken);
 
                 if (pharmacy is null)
                 {
-                    throw new ReservationRequestException(StatusCodes.Status404NotFound, "Pharmacy was not found.");
+                    throw new ReservationRequestException(StatusCodes.Status404NotFound, "Pharmacy was not found.", "reservation_pharmacy_not_found");
                 }
 
                 var requestedMedicineIds = request.Items.Select(item => item.MedicineId).Distinct().ToArray();
@@ -294,15 +368,17 @@ public class ReservationsController(
                     {
                         throw new ReservationRequestException(
                             StatusCodes.Status400BadRequest,
-                            $"Medicine '{item.MedicineId}' is not available in the selected pharmacy.");
+                            $"Medicine '{item.MedicineId}' is not available in the selected pharmacy.",
+                            "reservation_medicine_unavailable");
                     }
 
                     var availableQuantity = medicineStock.Sum(stock => stock.AvailableQuantity);
                     if (availableQuantity < item.Quantity)
                     {
                         throw new ReservationRequestException(
-                            StatusCodes.Status400BadRequest,
-                            $"Insufficient stock for medicine '{medicineStock[0].Medicine!.BrandName}'.");
+                            StatusCodes.Status422UnprocessableEntity,
+                            $"Insufficient stock for medicine '{medicineStock[0].Medicine!.BrandName}'.",
+                            "reservation_insufficient_stock");
                     }
                 }
 
@@ -312,7 +388,7 @@ public class ReservationsController(
 
                 if (customer is null)
                 {
-                    throw new ReservationRequestException(StatusCodes.Status401Unauthorized, "User is not authorized.");
+                    throw new ReservationRequestException(StatusCodes.Status401Unauthorized, "User is not authorized.", "reservation_unauthorized");
                 }
 
                 var reservation = new Reservation
@@ -353,7 +429,8 @@ public class ReservationsController(
                     {
                         throw new ReservationRequestException(
                             StatusCodes.Status409Conflict,
-                            $"Stock changed while reserving '{medicine.BrandName}'. Please refresh and try again.");
+                            $"Stock changed while reserving '{medicine.BrandName}'. Please refresh and try again.",
+                            "reservation_stock_conflict");
                     }
 
                     reservation.Items.Add(new ReservationItem
@@ -368,6 +445,13 @@ public class ReservationsController(
                 reservation.TotalAmount = reservation.Items.Sum(item => item.TotalPrice);
 
                 await context.Reservations.AddAsync(reservation, cancellationToken);
+
+                if (idempotencyRecord is not null)
+                {
+                    idempotencyRecord.ReservationId = reservation.Id;
+                    idempotencyRecord.CompletedAtUtc = DateTime.UtcNow;
+                }
+
                 await context.SaveChangesAsync(cancellationToken);
                 await transaction.CommitAsync(cancellationToken);
 
@@ -433,15 +517,31 @@ public class ReservationsController(
         }
         catch (ReservationRequestException exception)
         {
-            return StatusCode(exception.StatusCode, exception.Message);
+            return ProblemResponse(exception.StatusCode, exception.Code, exception.Message);
         }
         catch (DbUpdateConcurrencyException)
         {
-            return Conflict("Stock changed while creating the reservation. Please refresh and try again.");
+            return ProblemResponse(StatusCodes.Status409Conflict, "reservation_stock_conflict", "Stock changed while creating the reservation. Please refresh and try again.");
         }
         catch (DbUpdateException exception) when (IsTransientConcurrencyConflict(exception))
         {
-            return Conflict("Stock changed while creating the reservation. Please refresh and try again.");
+            return ProblemResponse(StatusCodes.Status409Conflict, "reservation_stock_conflict", "Stock changed while creating the reservation. Please refresh and try again.");
+        }
+        catch (DbUpdateException exception) when (IsUniqueIdempotencyViolation(exception))
+        {
+            var replay = await TryResolveIdempotentCreateAsync(
+                currentUserService.UserId.Value,
+                idempotencyKey!,
+                requestHash!,
+                cancellationToken);
+
+            if (replay is not null)
+            {
+                Response.Headers.Append("X-Idempotent-Replay", "true");
+                return replay;
+            }
+
+            return ProblemResponse(StatusCodes.Status409Conflict, "reservation_idempotency_in_progress", "A reservation request with the same idempotency key is already being processed.");
         }
     }
 
@@ -451,6 +551,7 @@ public class ReservationsController(
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status403Forbidden)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status422UnprocessableEntity)]
     public Task<ActionResult<ReservationResponse>> Confirm(Guid id, CancellationToken cancellationToken)
         => TransitionAsync(id, ReservationStatus.Confirmed, cancellationToken);
 
@@ -460,6 +561,7 @@ public class ReservationsController(
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status403Forbidden)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status422UnprocessableEntity)]
     public Task<ActionResult<ReservationResponse>> MarkReadyForPickup(Guid id, CancellationToken cancellationToken)
         => TransitionAsync(id, ReservationStatus.ReadyForPickup, cancellationToken);
 
@@ -469,6 +571,7 @@ public class ReservationsController(
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status403Forbidden)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status422UnprocessableEntity)]
     public Task<ActionResult<ReservationResponse>> Complete(Guid id, CancellationToken cancellationToken)
         => TransitionAsync(id, ReservationStatus.Completed, cancellationToken);
 
@@ -478,6 +581,7 @@ public class ReservationsController(
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status403Forbidden)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status422UnprocessableEntity)]
     public Task<ActionResult<ReservationResponse>> Cancel(Guid id, CancellationToken cancellationToken)
         => TransitionAsync(id, ReservationStatus.Cancelled, cancellationToken);
 
@@ -487,6 +591,7 @@ public class ReservationsController(
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status403Forbidden)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status422UnprocessableEntity)]
     public Task<ActionResult<ReservationResponse>> Expire(Guid id, CancellationToken cancellationToken)
         => TransitionAsync(id, ReservationStatus.Expired, cancellationToken);
 
@@ -496,6 +601,7 @@ public class ReservationsController(
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status403Forbidden)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status422UnprocessableEntity)]
     public Task<ActionResult<ReservationResponse>> UpdateStatus(
         Guid id,
         [FromBody] UpdateReservationStatusRequest request,
@@ -576,14 +682,19 @@ public class ReservationsController(
             }
         }
 
-        if (!CanChangeStatus(reservation.Status, nextStatus, isOwner, isPharmacist || isModerator))
-        {
-            return BadRequest("The requested reservation status transition is not allowed.");
-        }
+        var initialTransitionDecision = reservationTransitionPolicy.Evaluate(
+            reservation.Status,
+            nextStatus,
+            isOwner,
+            isPharmacist,
+            isModerator);
 
-        if (!isOwner && !isPharmacist && !isModerator)
+        if (!initialTransitionDecision.IsAllowed)
         {
-            return Forbid();
+            return ProblemResponse(
+                initialTransitionDecision.StatusCode,
+                initialTransitionDecision.Code,
+                initialTransitionDecision.Message);
         }
 
         var previousStatus = reservation.Status;
@@ -605,7 +716,10 @@ public class ReservationsController(
 
                 if (reservation is null)
                 {
-                    throw new ReservationRequestException(StatusCodes.Status404NotFound, "Reservation was not found.");
+                    throw new ReservationRequestException(
+                        StatusCodes.Status404NotFound,
+                        "Reservation was not found.",
+                        "reservation_not_found");
                 }
 
                 if (reservation.Status == nextStatus)
@@ -614,11 +728,19 @@ public class ReservationsController(
                     return;
                 }
 
-                if (!CanChangeStatus(reservation.Status, nextStatus, isOwner, isPharmacist || isModerator))
+                var transitionDecision = reservationTransitionPolicy.Evaluate(
+                    reservation.Status,
+                    nextStatus,
+                    isOwner,
+                    isPharmacist,
+                    isModerator);
+
+                if (!transitionDecision.IsAllowed)
                 {
                     throw new ReservationRequestException(
-                        StatusCodes.Status400BadRequest,
-                        "The requested reservation status transition is not allowed.");
+                        transitionDecision.StatusCode,
+                        transitionDecision.Message,
+                        transitionDecision.Code);
                 }
 
                 previousStatus = reservation.Status;
@@ -647,19 +769,19 @@ public class ReservationsController(
         }
         catch (ReservationRequestException exception)
         {
-            return StatusCode(exception.StatusCode, exception.Message);
+            return ProblemResponse(exception.StatusCode, exception.Code, exception.Message);
         }
         catch (InvalidOperationException exception)
         {
-            return Conflict(exception.Message);
+            return ProblemResponse(StatusCodes.Status409Conflict, "reservation_stock_conflict", exception.Message);
         }
         catch (DbUpdateConcurrencyException)
         {
-            return Conflict("Reservation or stock changed while updating status. Please refresh and try again.");
+            return ProblemResponse(StatusCodes.Status409Conflict, "reservation_concurrency_conflict", "Reservation or stock changed while updating status. Please refresh and try again.");
         }
         catch (DbUpdateException exception) when (IsTransientConcurrencyConflict(exception))
         {
-            return Conflict("Reservation or stock changed while updating status. Please refresh and try again.");
+            return ProblemResponse(StatusCodes.Status409Conflict, "reservation_concurrency_conflict", "Reservation or stock changed while updating status. Please refresh and try again.");
         }
 
         if (nextStatus == ReservationStatus.Completed)
@@ -827,40 +949,6 @@ public class ReservationsController(
         };
     }
 
-    private static bool CanChangeStatus(
-        ReservationStatus currentStatus,
-        ReservationStatus nextStatus,
-        bool isOwner,
-        bool isStaff)
-    {
-        if (isOwner)
-        {
-            return nextStatus == ReservationStatus.Cancelled &&
-                (currentStatus == ReservationStatus.Pending ||
-                 currentStatus == ReservationStatus.Confirmed ||
-                 currentStatus == ReservationStatus.ReadyForPickup);
-        }
-
-        if (!isStaff)
-        {
-            return false;
-        }
-
-        return (currentStatus, nextStatus) switch
-        {
-            (ReservationStatus.Pending, ReservationStatus.Confirmed) => true,
-            (ReservationStatus.Pending, ReservationStatus.Cancelled) => true,
-            (ReservationStatus.Pending, ReservationStatus.Expired) => true,
-            (ReservationStatus.Confirmed, ReservationStatus.ReadyForPickup) => true,
-            (ReservationStatus.Confirmed, ReservationStatus.Cancelled) => true,
-            (ReservationStatus.Confirmed, ReservationStatus.Expired) => true,
-            (ReservationStatus.ReadyForPickup, ReservationStatus.Completed) => true,
-            (ReservationStatus.ReadyForPickup, ReservationStatus.Cancelled) => true,
-            (ReservationStatus.ReadyForPickup, ReservationStatus.Expired) => true,
-            _ => false
-        };
-    }
-
     private static string GenerateReservationNumber()
     {
         return $"RES-{DateTime.UtcNow:yyyyMMddHHmmss}-{Random.Shared.Next(1000, 9999)}";
@@ -900,8 +988,119 @@ public class ReservationsController(
                 postgresException.SqlState == PostgresErrorCodes.DeadlockDetected);
     }
 
-    private sealed class ReservationRequestException(int statusCode, string message) : Exception(message)
+    private static bool IsUniqueIdempotencyViolation(DbUpdateException exception)
+    {
+        return exception.InnerException is PostgresException postgresException &&
+               postgresException.SqlState == PostgresErrorCodes.UniqueViolation &&
+               string.Equals(postgresException.ConstraintName, "IX_reservation_idempotency_records_UserId_IdempotencyKey", StringComparison.Ordinal);
+    }
+
+    private async Task<ActionResult<ReservationResponse>?> TryResolveIdempotentCreateAsync(
+        Guid userId,
+        string idempotencyKey,
+        string requestHash,
+        CancellationToken cancellationToken)
+    {
+        var record = await context.ReservationIdempotencyRecords
+            .AsNoTracking()
+            .FirstOrDefaultAsync(x => x.UserId == userId && x.IdempotencyKey == idempotencyKey, cancellationToken);
+
+        if (record is null)
+        {
+            return null;
+        }
+
+        if (!string.Equals(record.RequestHash, requestHash, StringComparison.Ordinal))
+        {
+            return ProblemResponse(
+                StatusCodes.Status409Conflict,
+                "reservation_idempotency_conflict",
+                "This idempotency key has already been used with a different reservation payload.");
+        }
+
+        if (!record.ReservationId.HasValue)
+        {
+            return ProblemResponse(
+                StatusCodes.Status409Conflict,
+                "reservation_idempotency_in_progress",
+                "A reservation request with the same idempotency key is already being processed.");
+        }
+
+        var response = await QueryReservations()
+            .Where(x => x.ReservationId == record.ReservationId.Value)
+            .FirstOrDefaultAsync(cancellationToken);
+
+        if (response is null)
+        {
+            return null;
+        }
+
+        return Ok(response);
+    }
+
+    private ActionResult ValidationProblemResponse(string code, string detail)
+    {
+        var problemDetails = new ValidationProblemDetails
+        {
+            Status = StatusCodes.Status400BadRequest,
+            Title = "Reservation validation failed",
+            Detail = detail,
+            Type = $"https://pharmago.local/problems/{code}"
+        };
+        problemDetails.Extensions["code"] = code;
+
+        return BadRequest(problemDetails);
+    }
+
+    private ObjectResult ProblemResponse(int statusCode, string code, string detail)
+    {
+        var title = statusCode switch
+        {
+            StatusCodes.Status403Forbidden => "Reservation action forbidden",
+            StatusCodes.Status404NotFound => "Reservation resource not found",
+            StatusCodes.Status409Conflict => "Reservation request conflicted with current state",
+            StatusCodes.Status422UnprocessableEntity => "Reservation business rule violated",
+            _ => "Reservation request failed"
+        };
+
+        var problemDetails = new ProblemDetails
+        {
+            Status = statusCode,
+            Title = title,
+            Detail = detail,
+            Type = $"https://pharmago.local/problems/{code}"
+        };
+        problemDetails.Extensions["code"] = code;
+
+        return StatusCode(statusCode, problemDetails);
+    }
+
+    private static string ComputeRequestHash(CreateReservationRequest request)
+    {
+        var canonicalPayload = new
+        {
+            request.PharmacyId,
+            request.ReserveForHours,
+            Notes = request.Notes?.Trim() ?? string.Empty,
+            Items = request.Items
+                .OrderBy(x => x.MedicineId)
+                .ThenBy(x => x.Quantity)
+                .Select(x => new
+                {
+                    x.MedicineId,
+                    x.Quantity
+                })
+                .ToArray()
+        };
+
+        var json = JsonSerializer.Serialize(canonicalPayload);
+        var hashBytes = SHA256.HashData(Encoding.UTF8.GetBytes(json));
+        return Convert.ToHexString(hashBytes);
+    }
+
+    private sealed class ReservationRequestException(int statusCode, string message, string code) : Exception(message)
     {
         public int StatusCode { get; } = statusCode;
+        public string Code { get; } = code;
     }
 }

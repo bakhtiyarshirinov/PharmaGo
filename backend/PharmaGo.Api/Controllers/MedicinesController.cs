@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Mvc;
 using PharmaGo.Application.Abstractions;
+using PharmaGo.Application.Medicines.Queries.GetConsumerMedicineFeed;
 using PharmaGo.Application.Medicines.Queries.GetMedicineAvailability;
 using PharmaGo.Application.Medicines.Queries.GetMedicineDetail;
 using PharmaGo.Application.Medicines.Queries.GetMedicineRecommendations;
@@ -12,7 +13,9 @@ namespace PharmaGo.Api.Controllers;
 public class MedicinesController(
     IMedicineSearchService medicineSearchService,
     IMedicineCatalogService medicineCatalogService,
-    IMedicineAvailabilityService medicineAvailabilityService) : ControllerBase
+    IMedicineAvailabilityService medicineAvailabilityService,
+    IMedicineConsumerService medicineConsumerService,
+    ICurrentUserService currentUserService) : ControllerBase
 {
     [HttpGet("search")]
     [ProducesResponseType(typeof(IReadOnlyCollection<MedicineSearchResponse>), StatusCodes.Status200OK)]
@@ -53,6 +56,20 @@ public class MedicinesController(
         return Ok(response);
     }
 
+    [HttpGet("popular")]
+    [ProducesResponseType(typeof(IReadOnlyCollection<ConsumerMedicineFeedItemResponse>), StatusCodes.Status200OK)]
+    public async Task<ActionResult<IReadOnlyCollection<ConsumerMedicineFeedItemResponse>>> Popular(
+        [FromQuery] int limit,
+        CancellationToken cancellationToken)
+    {
+        var response = await medicineConsumerService.GetPopularAsync(
+            currentUserService.UserId,
+            limit == 0 ? 10 : limit,
+            cancellationToken);
+
+        return Ok(response);
+    }
+
     [HttpGet("{id:guid}")]
     [ProducesResponseType(typeof(MedicineDetailResponse), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
@@ -61,7 +78,17 @@ public class MedicinesController(
         CancellationToken cancellationToken)
     {
         var response = await medicineCatalogService.GetByIdAsync(id, cancellationToken);
-        return response is null ? NotFound() : Ok(response);
+        if (response is null)
+        {
+            return NotFound();
+        }
+
+        if (currentUserService.UserId.HasValue)
+        {
+            await medicineConsumerService.RecordViewAsync(currentUserService.UserId.Value, id, cancellationToken);
+        }
+
+        return Ok(response);
     }
 
     [HttpGet("{id:guid}/substitutions")]

@@ -16,6 +16,8 @@ public class Medicine : BaseEntity
     public Guid? CategoryId { get; set; }
     public MedicineCategory? Category { get; set; }
 
+    public ICollection<UserFavoriteMedicine> FavoritedByUsers { get; set; } = new List<UserFavoriteMedicine>();
+    public ICollection<UserMedicineView> ViewedByUsers { get; set; } = new List<UserMedicineView>();
     public ICollection<StockItem> StockItems { get; set; } = new List<StockItem>();
     public ICollection<ReservationItem> ReservationItems { get; set; } = new List<ReservationItem>();
     public ICollection<SupplierMedicine> SupplierMedicines { get; set; } = new List<SupplierMedicine>();

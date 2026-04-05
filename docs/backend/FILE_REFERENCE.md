@@ -17,7 +17,8 @@ This file documents the purpose of every backend source file currently in the re
 
 ### Controllers
 - `backend/PharmaGo.Api/Controllers/AuthController.cs`: authentication and role management endpoints.
-- `backend/PharmaGo.Api/Controllers/MedicinesController.cs`: public medicine search, recommendation and availability endpoints.
+- `backend/PharmaGo.Api/Controllers/MedicinesController.cs`: public medicine search, recommendation, popular-feed and availability endpoints.
+- `backend/PharmaGo.Api/Controllers/MeMedicinesController.cs`: authenticated consumer medicine feeds for favorites and recent views.
 - `backend/PharmaGo.Api/Controllers/PharmaciesController.cs`: public nearby-pharmacy discovery endpoint with geo filters and paging.
 - `backend/PharmaGo.Api/Controllers/UsersController.cs`: moderator-only user management endpoints with soft delete and restore.
 - `backend/PharmaGo.Api/Controllers/ReservationsController.cs`: reservation create, active/timeline lookup and explicit workflow transition endpoints.
@@ -47,6 +48,7 @@ This file documents the purpose of every backend source file currently in the re
 - `backend/PharmaGo.Application/Abstractions/IJwtTokenGenerator.cs`: contract for JWT access token generation.
 - `backend/PharmaGo.Application/Abstractions/IMedicineAvailabilityService.cs`: contract for public read-model lookup of pharmacy availability for a medicine.
 - `backend/PharmaGo.Application/Abstractions/IMedicineCatalogService.cs`: contract for public medicine-card lookup with aggregated availability summary.
+- `backend/PharmaGo.Application/Abstractions/IMedicineConsumerService.cs`: contract for consumer personalized feeds, favorite actions and recent-view tracking.
 - `backend/PharmaGo.Application/Abstractions/IMedicineSearchService.cs`: contract for consumer-facing medicine catalog search with geo-aware ranking.
 - `backend/PharmaGo.Application/Abstractions/IPharmacyCatalogService.cs`: contract for pharmacy-card lookup and pharmacy-centric medicine browsing.
 - `backend/PharmaGo.Application/Abstractions/IPharmacyDiscoveryService.cs`: contract for nearby-pharmacy discovery and filtering.
@@ -66,6 +68,7 @@ This file documents the purpose of every backend source file currently in the re
 - `backend/PharmaGo.Application/Common/Contracts/PagedResponse.cs`: generic paged response wrapper with totals, pages and sorting metadata.
 
 ### Medicines
+- `backend/PharmaGo.Application/Medicines/Queries/GetConsumerMedicineFeed/ConsumerMedicineFeedItemResponse.cs`: DTO for popular, favorite and recent consumer medicine feeds with personalization flags.
 - `backend/PharmaGo.Application/Medicines/Queries/GetMedicineAvailability/GetMedicineAvailabilityRequest.cs`: query model for medicine availability lookup with geo and stock filters.
 - `backend/PharmaGo.Application/Medicines/Queries/GetMedicineAvailability/MedicineAvailabilityPharmacyResponse.cs`: pharmacy row returned by medicine availability endpoint.
 - `backend/PharmaGo.Application/Medicines/Queries/GetMedicineAvailability/MedicineAvailabilityResponse.cs`: aggregate medicine availability response with medicine details and pharmacy list.
@@ -136,6 +139,8 @@ This file documents the purpose of every backend source file currently in the re
 - `backend/PharmaGo.Domain/Models/ReservationItem.cs`: line item inside a reservation referencing medicine and quantity.
 - `backend/PharmaGo.Domain/Models/SupplierMedicine.cs`: relation between depot and medicine including wholesale conditions.
 - `backend/PharmaGo.Domain/Models/StockItem.cs`: per-batch stock record with availability, pricing, reorder logic and optimistic concurrency token.
+- `backend/PharmaGo.Domain/Models/UserFavoriteMedicine.cs`: user-personalization join entity for favorite medicines.
+- `backend/PharmaGo.Domain/Models/UserMedicineView.cs`: user-personalization entity tracking last viewed medicine cards and view count.
 
 ### Enums
 - `backend/PharmaGo.Domain/Models/Enums/ReservationStatus.cs`: allowed reservation states in the workflow.
@@ -180,6 +185,8 @@ This file documents the purpose of every backend source file currently in the re
 - `backend/PharmaGo.Infrastructure/Persistence/Configurations/ReservationItemConfiguration.cs`: EF mapping for reservation line items.
 - `backend/PharmaGo.Infrastructure/Persistence/Configurations/StockItemConfiguration.cs`: EF mapping for inventory batches and uniqueness constraints.
 - `backend/PharmaGo.Infrastructure/Persistence/Configurations/SupplierMedicineConfiguration.cs`: EF mapping for depot-medicine supply rows.
+- `backend/PharmaGo.Infrastructure/Persistence/Configurations/UserFavoriteMedicineConfiguration.cs`: EF mapping for favorite-medicine rows and uniqueness per user.
+- `backend/PharmaGo.Infrastructure/Persistence/Configurations/UserMedicineViewConfiguration.cs`: EF mapping for per-user medicine view rows and recency indexes.
 
 ### Migrations
 - `backend/PharmaGo.Infrastructure/Persistence/Migrations/20260404184117_InitialCreate.cs`: initial schema creation for the core domain model.
@@ -196,12 +203,15 @@ This file documents the purpose of every backend source file currently in the re
 - `backend/PharmaGo.Infrastructure/Persistence/Migrations/20260404222137_AddReservationAndStockConcurrency.Designer.cs`: EF-generated metadata for the reservation/stock concurrency migration.
 - `backend/PharmaGo.Infrastructure/Persistence/Migrations/20260405145954_AddReservationLifecycleTracking.cs`: schema update adding reservation lifecycle timestamps for ready, complete and expire states.
 - `backend/PharmaGo.Infrastructure/Persistence/Migrations/20260405145954_AddReservationLifecycleTracking.Designer.cs`: EF-generated metadata for the reservation lifecycle migration.
+- `backend/PharmaGo.Infrastructure/Persistence/Migrations/20260405185242_AddUserMedicineFavoritesAndViews.cs`: schema update adding user favorite medicines and recent view tracking tables.
+- `backend/PharmaGo.Infrastructure/Persistence/Migrations/20260405185242_AddUserMedicineFavoritesAndViews.Designer.cs`: EF-generated metadata for the consumer medicine personalization migration.
 - `backend/PharmaGo.Infrastructure/Persistence/Migrations/ApplicationDbContextModelSnapshot.cs`: latest EF model snapshot used for future migration diffs.
 
 ### Services
 - `backend/PharmaGo.Infrastructure/Services/AuditService.cs`: writes persisted audit records to the database.
 - `backend/PharmaGo.Infrastructure/Services/MedicineAvailabilityService.cs`: builds consumer-facing pharmacy availability read models for a selected medicine.
 - `backend/PharmaGo.Infrastructure/Services/MedicineCatalogService.cs`: builds public medicine-card, substitution and similar-medicine read models with cached availability summaries.
+- `backend/PharmaGo.Infrastructure/Services/MedicineConsumerService.cs`: builds consumer popular/favorite/recent feeds and records favorite/recent interactions.
 - `backend/PharmaGo.Infrastructure/Services/MedicineSearchService.cs`: executes consumer-facing medicine search with geo filters, ranking and capped nested availabilities.
 - `backend/PharmaGo.Infrastructure/Services/PharmacyCatalogService.cs`: builds pharmacy-card and pharmacy-centric medicine catalog read models.
 - `backend/PharmaGo.Infrastructure/Services/PharmacyDiscoveryService.cs`: searches nearby pharmacies with geo, opening-hours and availability summary calculations.
@@ -223,6 +233,7 @@ This file documents the purpose of every backend source file currently in the re
 - `backend/PharmaGo.IntegrationTests/Auth/AuthFlowTests.cs`: covers register, refresh rotation, logout and revoke-all flows.
 - `backend/PharmaGo.IntegrationTests/Medicines/MedicineAvailabilityTests.cs`: covers consumer-facing medicine availability lookup and reservable-only filtering.
 - `backend/PharmaGo.IntegrationTests/Medicines/MedicineCatalogTests.cs`: covers medicine-card lookup with live summary data.
+- `backend/PharmaGo.IntegrationTests/Medicines/ConsumerMedicineFlowTests.cs`: covers consumer popular feed, favorites and recent-view tracking.
 - `backend/PharmaGo.IntegrationTests/Medicines/MedicineRecommendationTests.cs`: covers substitution and similar-medicine recommendation endpoints.
 - `backend/PharmaGo.IntegrationTests/Medicines/MedicineSearchTests.cs`: covers geo-aware medicine search, reservable-only filtering and invalid coordinate input handling.
 - `backend/PharmaGo.IntegrationTests/Medicines/MedicineSuggestionsTests.cs`: covers lightweight medicine autocomplete endpoints.

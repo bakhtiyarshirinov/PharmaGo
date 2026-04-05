@@ -55,6 +55,9 @@ Endpoints:
 - `GET /api/medicines/suggestions?q=...`
   - public
   - returns lightweight autocomplete items for search boxes
+- `GET /api/medicines/popular`
+  - public
+  - returns a popularity-ranked consumer feed based on reservations, favorites and current availability
 - `GET /api/medicines/{id}`
   - public
   - returns full medicine card with category and current availability summary
@@ -75,9 +78,35 @@ Important details:
 - search responses are cached and invalidated when stock or reservation state changes
 - search can rank by relevance, distance or price
 - nested availabilities are distance-aware and capped with `availabilityLimit` for smaller payloads
+- authenticated medicine card reads automatically update the user's recent-medicines feed
 - substitutions use a safe same-generic same-form same-strength rule for additive MVP behavior
 - similar medicines prefer same category and dosage form while avoiding exact self matches
 - availability response can sort by distance or price and includes open-now and reservation capability flags
+
+## MeMedicinesController
+File: `backend/PharmaGo.Api/Controllers/MeMedicinesController.cs`
+
+Purpose:
+- gives authenticated users consumer-specific medicine feeds and favorite actions
+
+Endpoints:
+- `GET /api/me/medicines/favorites`
+  - authenticated
+  - returns the user's favorite medicines with availability summary
+- `POST /api/me/medicines/favorites/{medicineId}`
+  - authenticated
+  - idempotently adds a medicine to favorites
+- `DELETE /api/me/medicines/favorites/{medicineId}`
+  - authenticated
+  - idempotently removes a medicine from favorites
+- `GET /api/me/medicines/recent`
+  - authenticated
+  - returns recently viewed medicines ordered by last view time
+
+Important details:
+- favorites and recent feeds reuse the live medicine availability summary
+- recent feed is driven by actual medicine-card views rather than reservation history
+- favorite and recent tables are additive user-personalization storage and do not affect existing medicine contracts
 
 ## PharmaciesController
 File: `backend/PharmaGo.Api/Controllers/PharmaciesController.cs`

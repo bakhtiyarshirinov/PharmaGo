@@ -19,6 +19,8 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
     public DbSet<ReservationItem> ReservationItems => Set<ReservationItem>();
     public DbSet<StockItem> StockItems => Set<StockItem>();
     public DbSet<SupplierMedicine> SupplierMedicines => Set<SupplierMedicine>();
+    public DbSet<UserFavoriteMedicine> UserFavoriteMedicines => Set<UserFavoriteMedicine>();
+    public DbSet<UserMedicineView> UserMedicineViews => Set<UserMedicineView>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

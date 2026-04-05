@@ -40,7 +40,8 @@ The backend solves four main business flows:
 ## Main HTTP Areas
 - `AuthController`: register, login, current user, role update
 - `UsersController`: moderator user management, pharmacist creation, soft delete and restore
-- `MedicinesController`: medicine catalog search, autocomplete, medicine cards, substitutions, similar medicines and pharmacy availability
+- `MedicinesController`: medicine catalog search, autocomplete, popular feed, medicine cards, substitutions, similar medicines and pharmacy availability
+- `MeMedicinesController`: authenticated consumer medicine feeds for favorites and recent views
 - `PharmaciesController`: nearby pharmacy discovery, map pins, autocomplete, pharmacy cards and pharmacy catalog browsing
 - `ReservationsController`: create reservation, active/timeline lookup and explicit lifecycle commands
 - `StocksController`: pharmacy stock CRUD, explicit inventory commands and operational stock alerts

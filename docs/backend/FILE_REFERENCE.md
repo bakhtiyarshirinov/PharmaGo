@@ -46,7 +46,9 @@ This file documents the purpose of every backend source file currently in the re
 - `backend/PharmaGo.Application/Abstractions/ICurrentUserService.cs`: contract for reading current authenticated user identity from request context.
 - `backend/PharmaGo.Application/Abstractions/IJwtTokenGenerator.cs`: contract for JWT access token generation.
 - `backend/PharmaGo.Application/Abstractions/IMedicineAvailabilityService.cs`: contract for public read-model lookup of pharmacy availability for a medicine.
+- `backend/PharmaGo.Application/Abstractions/IMedicineCatalogService.cs`: contract for public medicine-card lookup with aggregated availability summary.
 - `backend/PharmaGo.Application/Abstractions/IMedicineSearchService.cs`: contract for consumer-facing medicine catalog search with geo-aware ranking.
+- `backend/PharmaGo.Application/Abstractions/IPharmacyCatalogService.cs`: contract for pharmacy-card lookup and pharmacy-centric medicine browsing.
 - `backend/PharmaGo.Application/Abstractions/IPharmacyDiscoveryService.cs`: contract for nearby-pharmacy discovery and filtering.
 - `backend/PharmaGo.Application/Abstractions/IRefreshTokenService.cs`: contract for issuing, loading and revoking refresh tokens.
 - `backend/PharmaGo.Application/Abstractions/IReservationStateService.cs`: contract for releasing and completing reserved stock safely.
@@ -67,11 +69,15 @@ This file documents the purpose of every backend source file currently in the re
 - `backend/PharmaGo.Application/Medicines/Queries/GetMedicineAvailability/GetMedicineAvailabilityRequest.cs`: query model for medicine availability lookup with geo and stock filters.
 - `backend/PharmaGo.Application/Medicines/Queries/GetMedicineAvailability/MedicineAvailabilityPharmacyResponse.cs`: pharmacy row returned by medicine availability endpoint.
 - `backend/PharmaGo.Application/Medicines/Queries/GetMedicineAvailability/MedicineAvailabilityResponse.cs`: aggregate medicine availability response with medicine details and pharmacy list.
+- `backend/PharmaGo.Application/Medicines/Queries/GetMedicineDetail/MedicineDetailResponse.cs`: public medicine-card DTO with category and live availability summary.
 - `backend/PharmaGo.Application/Medicines/Queries/SearchMedicines/MedicineAvailabilityDto.cs`: pharmacy-level availability row for search results.
 - `backend/PharmaGo.Application/Medicines/Queries/SearchMedicines/SearchMedicinesRequest.cs`: query model for medicine search with geo-aware ranking and payload limits.
 - `backend/PharmaGo.Application/Medicines/Queries/SearchMedicines/MedicineSearchResponse.cs`: medicine search result DTO including catalog data and stock aggregates.
 
 ### Pharmacies
+- `backend/PharmaGo.Application/Pharmacies/Queries/GetPharmacyDetail/PharmacyDetailResponse.cs`: public pharmacy-card DTO with contacts, hours, services and stock summary.
+- `backend/PharmaGo.Application/Pharmacies/Queries/GetPharmacyMedicines/GetPharmacyMedicinesRequest.cs`: query model for browsing medicines inside a pharmacy.
+- `backend/PharmaGo.Application/Pharmacies/Queries/GetPharmacyMedicines/PharmacyMedicineResponse.cs`: pharmacy-centric medicine row with availability and pricing summary.
 - `backend/PharmaGo.Application/Pharmacies/Queries/SearchNearbyPharmacies/NearbyPharmacyResponse.cs`: paged pharmacy discovery row including distance, availability summary and operating flags.
 - `backend/PharmaGo.Application/Pharmacies/Queries/SearchNearbyPharmacies/SearchNearbyPharmaciesRequest.cs`: query model for nearby-pharmacy search and paging.
 
@@ -178,7 +184,9 @@ This file documents the purpose of every backend source file currently in the re
 ### Services
 - `backend/PharmaGo.Infrastructure/Services/AuditService.cs`: writes persisted audit records to the database.
 - `backend/PharmaGo.Infrastructure/Services/MedicineAvailabilityService.cs`: builds consumer-facing pharmacy availability read models for a selected medicine.
+- `backend/PharmaGo.Infrastructure/Services/MedicineCatalogService.cs`: builds public medicine-card read models with live availability summary.
 - `backend/PharmaGo.Infrastructure/Services/MedicineSearchService.cs`: executes consumer-facing medicine search with geo filters, ranking and capped nested availabilities.
+- `backend/PharmaGo.Infrastructure/Services/PharmacyCatalogService.cs`: builds pharmacy-card and pharmacy-centric medicine catalog read models.
 - `backend/PharmaGo.Infrastructure/Services/PharmacyDiscoveryService.cs`: searches nearby pharmacies with geo, opening-hours and availability summary calculations.
 - `backend/PharmaGo.Infrastructure/Services/PharmacyDiscoverySupport.cs`: shared helpers for distance calculation and opening-hours evaluation.
 - `backend/PharmaGo.Infrastructure/Services/RefreshTokenService.cs`: generates, hashes, rotates and revokes refresh tokens.
@@ -197,7 +205,9 @@ This file documents the purpose of every backend source file currently in the re
 ### Test Suites
 - `backend/PharmaGo.IntegrationTests/Auth/AuthFlowTests.cs`: covers register, refresh rotation, logout and revoke-all flows.
 - `backend/PharmaGo.IntegrationTests/Medicines/MedicineAvailabilityTests.cs`: covers consumer-facing medicine availability lookup and reservable-only filtering.
+- `backend/PharmaGo.IntegrationTests/Medicines/MedicineCatalogTests.cs`: covers medicine-card lookup with live summary data.
 - `backend/PharmaGo.IntegrationTests/Medicines/MedicineSearchTests.cs`: covers geo-aware medicine search, reservable-only filtering and invalid coordinate input handling.
+- `backend/PharmaGo.IntegrationTests/Pharmacies/PharmacyCatalogTests.cs`: covers pharmacy-card lookup and pharmacy-centric medicine catalog browsing.
 - `backend/PharmaGo.IntegrationTests/Pharmacies/PharmacyDiscoveryTests.cs`: covers nearby-pharmacy discovery, open-now filtering and invalid geo input handling.
 - `backend/PharmaGo.IntegrationTests/Reservations/ReservationFlowTests.cs`: covers authenticated reservation creation, pharmacist completion workflow and concurrent reservation hardening.
 - `backend/PharmaGo.IntegrationTests/Users/UserManagementTests.cs`: covers moderator account creation, soft delete and restore scenarios.

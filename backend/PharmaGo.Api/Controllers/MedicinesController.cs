@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Mvc;
 using PharmaGo.Application.Abstractions;
 using PharmaGo.Application.Medicines.Queries.GetMedicineAvailability;
+using PharmaGo.Application.Medicines.Queries.GetMedicineDetail;
 using PharmaGo.Application.Medicines.Queries.SearchMedicines;
 
 namespace PharmaGo.Api.Controllers;
@@ -9,6 +10,7 @@ namespace PharmaGo.Api.Controllers;
 [Route("api/[controller]")]
 public class MedicinesController(
     IMedicineSearchService medicineSearchService,
+    IMedicineCatalogService medicineCatalogService,
     IMedicineAvailabilityService medicineAvailabilityService) : ControllerBase
 {
     [HttpGet("search")]
@@ -31,6 +33,17 @@ public class MedicinesController(
 
         var medicines = await medicineSearchService.SearchAsync(request, cancellationToken);
         return Ok(medicines);
+    }
+
+    [HttpGet("{id:guid}")]
+    [ProducesResponseType(typeof(MedicineDetailResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<ActionResult<MedicineDetailResponse>> GetById(
+        Guid id,
+        CancellationToken cancellationToken)
+    {
+        var response = await medicineCatalogService.GetByIdAsync(id, cancellationToken);
+        return response is null ? NotFound() : Ok(response);
     }
 
     [HttpGet("{id:guid}/availability")]

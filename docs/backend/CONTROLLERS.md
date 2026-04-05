@@ -334,6 +334,7 @@ Important details:
 - respects supplier minimum order quantity and supplier availability
 - emits `stock.low` and `stock.restored` SignalR events
 - writes audit records for create, update and explicit stock command actions
+- stock audit metadata now includes normalized `reason`, `before`, `after` and structured `change` snapshots
 - dashboard and medicine-search caches are invalidated on stock writes
 
 ## DashboardController

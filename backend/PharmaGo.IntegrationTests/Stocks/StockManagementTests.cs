@@ -1,6 +1,7 @@
 using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
+using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using PharmaGo.Application.Auth.Contracts;
@@ -156,6 +157,137 @@ public class StockManagementTests(CustomWebApplicationFactory factory) : IClassF
         });
 
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task Adjust_ShouldWriteRichAuditMetadata()
+    {
+        await AuthorizePharmacistAsync();
+
+        Guid stockItemId;
+
+        using (var scope = factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+            stockItemId = await db.StockItems
+                .Include(x => x.Pharmacy)
+                .Where(x => x.Pharmacy!.Name == "PharmaGo Central" && x.Quantity >= 10)
+                .Select(x => x.Id)
+                .FirstAsync();
+        }
+
+        var response = await _client.PostAsJsonAsync($"/api/stocks/{stockItemId}/adjust", new AdjustStockQuantityRequest
+        {
+            QuantityDelta = -2,
+            Reason = "Cycle count correction"
+        });
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        using var verificationScope = factory.Services.CreateScope();
+        var verificationDb = verificationScope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+        var audit = await verificationDb.AuditLogs
+            .AsNoTracking()
+            .Where(x => x.EntityName == "StockItem" && x.EntityId == stockItemId.ToString() && x.Action == "stock.adjusted")
+            .OrderByDescending(x => x.CreatedAtUtc)
+            .FirstAsync();
+
+        Assert.NotNull(audit.MetadataJson);
+
+        using var document = JsonDocument.Parse(audit.MetadataJson!);
+        var root = document.RootElement;
+
+        Assert.Equal("Cycle count correction", root.GetProperty("Reason").GetString());
+        Assert.Equal(-2, root.GetProperty("Change").GetProperty("QuantityDelta").GetInt32());
+        Assert.True(root.GetProperty("Before").GetProperty("Quantity").GetInt32() > root.GetProperty("After").GetProperty("Quantity").GetInt32());
+    }
+
+    [Fact]
+    public async Task Receive_ShouldWriteBeforeAfterAuditSnapshot()
+    {
+        await AuthorizePharmacistAsync();
+
+        Guid stockItemId;
+
+        using (var scope = factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+            stockItemId = await db.StockItems
+                .Include(x => x.Pharmacy)
+                .Where(x => x.Pharmacy!.Name == "PharmaGo Central" && x.Quantity >= 5)
+                .Select(x => x.Id)
+                .FirstAsync();
+        }
+
+        var response = await _client.PostAsJsonAsync($"/api/stocks/{stockItemId}/receive", new ReceiveStockRequest
+        {
+            QuantityReceived = 10,
+            PurchasePrice = 0.90m,
+            RetailPrice = 1.50m,
+            ReorderLevel = 9,
+            Reason = "Supplier delivery"
+        });
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        using var verificationScope = factory.Services.CreateScope();
+        var verificationDb = verificationScope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+        var audit = await verificationDb.AuditLogs
+            .AsNoTracking()
+            .Where(x => x.EntityName == "StockItem" && x.EntityId == stockItemId.ToString() && x.Action == "stock.received")
+            .OrderByDescending(x => x.CreatedAtUtc)
+            .FirstAsync();
+
+        using var document = JsonDocument.Parse(audit.MetadataJson!);
+        var root = document.RootElement;
+
+        Assert.Equal("Supplier delivery", root.GetProperty("Reason").GetString());
+        Assert.Equal(10, root.GetProperty("Change").GetProperty("QuantityDelta").GetInt32());
+        Assert.Equal(1.50m, root.GetProperty("After").GetProperty("RetailPrice").GetDecimal());
+        Assert.True(root.GetProperty("After").GetProperty("Quantity").GetInt32() > root.GetProperty("Before").GetProperty("Quantity").GetInt32());
+    }
+
+    [Fact]
+    public async Task WriteOff_ShouldWriteReasonedAuditMetadata()
+    {
+        await AuthorizePharmacistAsync();
+
+        Guid stockItemId;
+
+        using (var scope = factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+            var stockItem = await db.StockItems
+                .Include(x => x.Pharmacy)
+                .FirstAsync(x => x.Pharmacy!.Name == "PharmaGo Central" && x.Quantity >= 6);
+
+            stockItem.ReservedQuantity = 1;
+            await db.SaveChangesAsync();
+            stockItemId = stockItem.Id;
+        }
+
+        var response = await _client.PostAsJsonAsync($"/api/stocks/{stockItemId}/writeoff", new WriteOffStockRequest
+        {
+            Quantity = 3,
+            Reason = "Damaged package"
+        });
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        using var verificationScope = factory.Services.CreateScope();
+        var verificationDb = verificationScope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+        var audit = await verificationDb.AuditLogs
+            .AsNoTracking()
+            .Where(x => x.EntityName == "StockItem" && x.EntityId == stockItemId.ToString() && x.Action == "stock.written_off")
+            .OrderByDescending(x => x.CreatedAtUtc)
+            .FirstAsync();
+
+        using var document = JsonDocument.Parse(audit.MetadataJson!);
+        var root = document.RootElement;
+
+        Assert.Equal("Damaged package", root.GetProperty("Reason").GetString());
+        Assert.Equal(-3, root.GetProperty("Change").GetProperty("QuantityDelta").GetInt32());
+        Assert.Equal(1, root.GetProperty("After").GetProperty("ReservedQuantity").GetInt32());
     }
 
     [Fact]

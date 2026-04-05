@@ -446,8 +446,15 @@ public class StocksController(
                 stockItem.PharmacyId,
                 stockItem.MedicineId,
                 stockItem.BatchNumber,
-                stockItem.Quantity,
-                stockItem.RetailPrice
+                Reason = "Initial stock creation",
+                After = CreateStockAuditSnapshot(stockItem),
+                Change = new
+                {
+                    QuantityDelta = stockItem.Quantity,
+                    PurchasePriceDelta = stockItem.PurchasePrice,
+                    RetailPriceDelta = stockItem.RetailPrice,
+                    ReorderLevelDelta = stockItem.ReorderLevel
+                }
             },
             cancellationToken: cancellationToken);
 
@@ -493,6 +500,8 @@ public class StocksController(
         }
 
         var wasLowStock = stockItem.IsLowStock;
+        var beforeSnapshot = CreateStockAuditSnapshot(stockItem);
+        var normalizedReason = NormalizeReason(request.Reason);
         stockItem.Quantity = updatedQuantity;
 
         return await SaveStockMutationAsync(
@@ -503,10 +512,16 @@ public class StocksController(
             new
             {
                 stockItem.Id,
-                Delta = request.QuantityDelta,
-                PreviousQuantity = stockItem.Quantity - request.QuantityDelta,
-                NewQuantity = stockItem.Quantity,
-                Reason = NormalizeReason(request.Reason)
+                Reason = normalizedReason,
+                Before = beforeSnapshot,
+                After = CreateStockAuditSnapshot(stockItem),
+                Change = new
+                {
+                    QuantityDelta = request.QuantityDelta,
+                    PurchasePriceDelta = 0m,
+                    RetailPriceDelta = 0m,
+                    ReorderLevelDelta = 0
+                }
             },
             cancellationToken);
     }
@@ -539,7 +554,12 @@ public class StocksController(
         }
 
         var wasLowStock = stockItem.IsLowStock;
+        var beforeSnapshot = CreateStockAuditSnapshot(stockItem);
         var previousQuantity = stockItem.Quantity;
+        var previousPurchasePrice = stockItem.PurchasePrice;
+        var previousRetailPrice = stockItem.RetailPrice;
+        var previousReorderLevel = stockItem.ReorderLevel;
+        var normalizedReason = NormalizeReason(request.Reason);
 
         stockItem.Quantity += request.QuantityReceived;
 
@@ -566,13 +586,16 @@ public class StocksController(
             new
             {
                 stockItem.Id,
-                QuantityReceived = request.QuantityReceived,
-                PreviousQuantity = previousQuantity,
-                NewQuantity = stockItem.Quantity,
-                PurchasePrice = stockItem.PurchasePrice,
-                RetailPrice = stockItem.RetailPrice,
-                ReorderLevel = stockItem.ReorderLevel,
-                Reason = NormalizeReason(request.Reason)
+                Reason = normalizedReason,
+                Before = beforeSnapshot,
+                After = CreateStockAuditSnapshot(stockItem),
+                Change = new
+                {
+                    QuantityDelta = stockItem.Quantity - previousQuantity,
+                    PurchasePriceDelta = stockItem.PurchasePrice - previousPurchasePrice,
+                    RetailPriceDelta = stockItem.RetailPrice - previousRetailPrice,
+                    ReorderLevelDelta = stockItem.ReorderLevel - previousReorderLevel
+                }
             },
             cancellationToken);
     }
@@ -610,7 +633,9 @@ public class StocksController(
         }
 
         var wasLowStock = stockItem.IsLowStock;
+        var beforeSnapshot = CreateStockAuditSnapshot(stockItem);
         var previousQuantity = stockItem.Quantity;
+        var normalizedReason = NormalizeReason(request.Reason);
         stockItem.Quantity -= request.Quantity;
 
         return await SaveStockMutationAsync(
@@ -621,10 +646,16 @@ public class StocksController(
             new
             {
                 stockItem.Id,
-                QuantityWrittenOff = request.Quantity,
-                PreviousQuantity = previousQuantity,
-                NewQuantity = stockItem.Quantity,
-                Reason = NormalizeReason(request.Reason)
+                Reason = normalizedReason,
+                Before = beforeSnapshot,
+                After = CreateStockAuditSnapshot(stockItem),
+                Change = new
+                {
+                    QuantityDelta = stockItem.Quantity - previousQuantity,
+                    PurchasePriceDelta = 0m,
+                    RetailPriceDelta = 0m,
+                    ReorderLevelDelta = 0
+                }
             },
             cancellationToken);
     }
@@ -673,6 +704,7 @@ public class StocksController(
         }
 
         var wasLowStock = stockItem.IsLowStock;
+        var beforeSnapshot = CreateStockAuditSnapshot(stockItem);
 
         stockItem.BatchNumber = request.BatchNumber.Trim();
         stockItem.ExpirationDate = request.ExpirationDate;
@@ -707,11 +739,19 @@ public class StocksController(
             metadata: new
             {
                 stockItem.Id,
-                stockItem.Quantity,
-                stockItem.ReservedQuantity,
-                stockItem.RetailPrice,
-                stockItem.ReorderLevel,
-                stockItem.IsActive
+                Reason = "Manual stock item update",
+                Before = beforeSnapshot,
+                After = CreateStockAuditSnapshot(stockItem),
+                Change = new
+                {
+                    QuantityDelta = stockItem.Quantity - beforeSnapshot.Quantity,
+                    PurchasePriceDelta = stockItem.PurchasePrice - beforeSnapshot.PurchasePrice,
+                    RetailPriceDelta = stockItem.RetailPrice - beforeSnapshot.RetailPrice,
+                    ReorderLevelDelta = stockItem.ReorderLevel - beforeSnapshot.ReorderLevel,
+                    BatchNumberChanged = !string.Equals(beforeSnapshot.BatchNumber, stockItem.BatchNumber, StringComparison.Ordinal),
+                    ExpirationDateChanged = beforeSnapshot.ExpirationDate != stockItem.ExpirationDate,
+                    IsActiveChanged = beforeSnapshot.IsActive != stockItem.IsActive
+                }
             },
             cancellationToken: cancellationToken);
 
@@ -847,6 +887,33 @@ public class StocksController(
     {
         return string.IsNullOrWhiteSpace(reason) ? null : reason.Trim();
     }
+
+    private static StockAuditSnapshot CreateStockAuditSnapshot(StockItem stockItem)
+    {
+        return new StockAuditSnapshot(
+            stockItem.BatchNumber,
+            stockItem.ExpirationDate,
+            stockItem.Quantity,
+            stockItem.ReservedQuantity,
+            stockItem.AvailableQuantity,
+            stockItem.PurchasePrice,
+            stockItem.RetailPrice,
+            stockItem.ReorderLevel,
+            stockItem.IsReservable,
+            stockItem.IsActive);
+    }
+
+    private sealed record StockAuditSnapshot(
+        string BatchNumber,
+        DateOnly ExpirationDate,
+        int Quantity,
+        int ReservedQuantity,
+        int AvailableQuantity,
+        decimal PurchasePrice,
+        decimal RetailPrice,
+        int ReorderLevel,
+        bool IsReservable,
+        bool IsActive);
 
     private static StockItemResponse MapStockItemResponse(StockItem stockItem)
     {

@@ -10,8 +10,39 @@ namespace PharmaGo.Api.Controllers;
 [Authorize]
 public class NotificationsController(
     ICurrentUserService currentUserService,
+    INotificationInboxService notificationInboxService,
     INotificationPreferenceService notificationPreferenceService) : ApiControllerBase
 {
+    [HttpGet("history")]
+    [ProducesResponseType(typeof(IReadOnlyCollection<NotificationHistoryItemResponse>), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    public async Task<ActionResult<IReadOnlyCollection<NotificationHistoryItemResponse>>> GetHistory(
+        [FromQuery] int limit = 20,
+        CancellationToken cancellationToken = default)
+    {
+        if (!currentUserService.UserId.HasValue)
+        {
+            return ApiUnauthorized();
+        }
+
+        var response = await notificationInboxService.GetHistoryAsync(currentUserService.UserId.Value, limit, cancellationToken);
+        return Ok(response);
+    }
+
+    [HttpGet("unread")]
+    [ProducesResponseType(typeof(NotificationUnreadCountResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    public async Task<ActionResult<NotificationUnreadCountResponse>> GetUnreadCount(CancellationToken cancellationToken)
+    {
+        if (!currentUserService.UserId.HasValue)
+        {
+            return ApiUnauthorized();
+        }
+
+        var response = await notificationInboxService.GetUnreadCountAsync(currentUserService.UserId.Value, cancellationToken);
+        return Ok(response);
+    }
+
     [HttpGet("preferences")]
     [ProducesResponseType(typeof(NotificationPreferencesResponse), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status401Unauthorized)]
@@ -40,5 +71,34 @@ public class NotificationsController(
 
         var response = await notificationPreferenceService.UpdateAsync(currentUserService.UserId.Value, request, cancellationToken);
         return Ok(response);
+    }
+
+    [HttpPost("{id:guid}/read")]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> MarkAsRead(Guid id, CancellationToken cancellationToken)
+    {
+        if (!currentUserService.UserId.HasValue)
+        {
+            return ApiUnauthorized();
+        }
+
+        var updated = await notificationInboxService.MarkAsReadAsync(currentUserService.UserId.Value, id, cancellationToken);
+        return updated ? NoContent() : ApiNotFound("notification_not_found", "Notification was not found.");
+    }
+
+    [HttpPost("read-all")]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    public async Task<IActionResult> MarkAllAsRead(CancellationToken cancellationToken)
+    {
+        if (!currentUserService.UserId.HasValue)
+        {
+            return ApiUnauthorized();
+        }
+
+        await notificationInboxService.MarkAllAsReadAsync(currentUserService.UserId.Value, cancellationToken);
+        return NoContent();
     }
 }

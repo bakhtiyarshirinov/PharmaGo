@@ -28,6 +28,7 @@ public class NotificationDeliveryLogConfiguration : IEntityTypeConfiguration<Not
 
         builder.HasIndex(x => new { x.UserId, x.EventType, x.Channel, x.CreatedAtUtc });
         builder.HasIndex(x => new { x.ReservationId, x.EventType, x.Channel });
+        builder.HasIndex(x => new { x.UserId, x.Status, x.ReadAtUtc, x.CreatedAtUtc });
 
         builder.HasOne(x => x.User)
             .WithMany(x => x.NotificationDeliveryLogs)

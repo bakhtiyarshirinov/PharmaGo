@@ -19,4 +19,5 @@ public class NotificationDeliveryLog : BaseEntity
     public string? PayloadJson { get; set; }
     public string? ErrorMessage { get; set; }
     public DateTime? DeliveredAtUtc { get; set; }
+    public DateTime? ReadAtUtc { get; set; }
 }

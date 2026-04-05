@@ -262,6 +262,18 @@ Endpoints:
 - `PUT /api/notifications/preferences`
   - authenticated
   - updates notification delivery preferences for reservation lifecycle events
+- `GET /api/notifications/history`
+  - authenticated
+  - returns recent notification delivery log items for the current user
+- `GET /api/notifications/unread`
+  - authenticated
+  - returns unread in-app notification count for the current user
+- `POST /api/notifications/{id}/read`
+  - authenticated
+  - marks a single notification inbox item as read
+- `POST /api/notifications/read-all`
+  - authenticated
+  - marks all unread in-app notifications as read for the current user
 
 Important details:
 - common controller-level validation, auth, forbidden and not-found failures now return problem-details payloads with stable `code` extensions
@@ -279,6 +291,7 @@ Important details:
 - delegates stock release and completion rules to `IReservationStateService`
 - delegates transition permissions and allowed state changes to `IReservationTransitionPolicy`
 - creates in-app notification delivery logs for reservation lifecycle events and expiring-soon reminders
+- exposes a lightweight notification inbox surface backed by delivery logs and read timestamps
 - dashboard and medicine-search caches are invalidated on reservation writes and automatic expiration
 
 ## StocksController

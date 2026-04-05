@@ -25,7 +25,7 @@ This file documents the purpose of every backend source file currently in the re
 - `backend/PharmaGo.Api/Controllers/MePharmaciesController.cs`: authenticated consumer pharmacy feeds for favorites and recent views.
 - `backend/PharmaGo.Api/Controllers/UsersController.cs`: moderator-only user management endpoints with soft delete and restore.
 - `backend/PharmaGo.Api/Controllers/ReservationsController.cs`: reservation create, active/timeline lookup and explicit workflow transition endpoints.
-- `backend/PharmaGo.Api/Controllers/NotificationsController.cs`: authenticated notification preference endpoints for in-app and future Telegram delivery settings.
+- `backend/PharmaGo.Api/Controllers/NotificationsController.cs`: authenticated notification preferences, inbox history and unread/read endpoints for in-app delivery.
 - `backend/PharmaGo.Api/Controllers/StocksController.cs`: inventory management, explicit stock command and operational alert endpoints for staff.
 - `backend/PharmaGo.Api/Controllers/DashboardController.cs`: dashboard summary and recent reservation endpoints for staff UI.
 - `backend/PharmaGo.Api/Controllers/AuditLogsController.cs`: audit log query endpoint for staff and moderators.
@@ -57,6 +57,7 @@ This file documents the purpose of every backend source file currently in the re
 - `backend/PharmaGo.Application/Abstractions/IMedicineCatalogService.cs`: contract for public medicine-card lookup with aggregated availability summary.
 - `backend/PharmaGo.Application/Abstractions/IMedicineConsumerService.cs`: contract for consumer personalized feeds, favorite actions and recent-view tracking.
 - `backend/PharmaGo.Application/Abstractions/IMedicineSearchService.cs`: contract for consumer-facing medicine catalog search with geo-aware ranking.
+- `backend/PharmaGo.Application/Abstractions/INotificationInboxService.cs`: contract for notification inbox history, unread counts and read-state mutations.
 - `backend/PharmaGo.Application/Abstractions/IPharmacyCatalogService.cs`: contract for pharmacy-card lookup and pharmacy-centric medicine browsing.
 - `backend/PharmaGo.Application/Abstractions/IPharmacyConsumerService.cs`: contract for consumer personalized pharmacy feeds, favorite actions and recent-view tracking.
 - `backend/PharmaGo.Application/Abstractions/IPharmacyDiscoveryService.cs`: contract for nearby-pharmacy discovery and filtering.
@@ -78,8 +79,10 @@ This file documents the purpose of every backend source file currently in the re
 - `backend/PharmaGo.Application/Common/Contracts/PagedResponse.cs`: generic paged response wrapper with totals, pages and sorting metadata.
 
 ### Notifications
+- `backend/PharmaGo.Application/Notifications/Contracts/NotificationHistoryItemResponse.cs`: DTO returned by notification inbox history with read state and delivery metadata.
 - `backend/PharmaGo.Application/Notifications/Contracts/NotificationMessagePayload.cs`: realtime in-app notification payload sent to authenticated users.
 - `backend/PharmaGo.Application/Notifications/Contracts/NotificationPreferencesResponse.cs`: DTO returned by notification preference endpoints.
+- `backend/PharmaGo.Application/Notifications/Contracts/NotificationUnreadCountResponse.cs`: DTO returned by unread notification count endpoint.
 - `backend/PharmaGo.Application/Notifications/Contracts/UpdateNotificationPreferencesRequest.cs`: request contract for updating notification preferences.
 
 ### Medicines

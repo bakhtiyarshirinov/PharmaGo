@@ -35,6 +35,23 @@ public class MedicinesController(
         return Ok(medicines);
     }
 
+    [HttpGet("suggestions")]
+    [ProducesResponseType(typeof(IReadOnlyCollection<MedicineSuggestionResponse>), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    public async Task<ActionResult<IReadOnlyCollection<MedicineSuggestionResponse>>> Suggestions(
+        [FromQuery] string q,
+        [FromQuery] int limit,
+        CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrWhiteSpace(q))
+        {
+            return BadRequest("Query is required.");
+        }
+
+        var response = await medicineSearchService.SuggestAsync(q, limit == 0 ? 8 : limit, cancellationToken);
+        return Ok(response);
+    }
+
     [HttpGet("{id:guid}")]
     [ProducesResponseType(typeof(MedicineDetailResponse), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]

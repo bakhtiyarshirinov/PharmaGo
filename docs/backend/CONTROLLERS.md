@@ -52,6 +52,9 @@ Endpoints:
   - filters out inactive, expired and zero-availability stock
   - supports optional `latitude`, `longitude`, `radiusKm`, `openNow`, `onlyReservable`, `sortBy`, `limit` and `availabilityLimit`
   - returns pharmacy-level availability and minimum retail price
+- `GET /api/medicines/suggestions?q=...`
+  - public
+  - returns lightweight autocomplete items for search boxes
 - `GET /api/medicines/{id}`
   - public
   - returns full medicine card with category and current availability summary
@@ -78,6 +81,13 @@ Endpoint:
 - `GET /api/pharmacies/search`
   - public
   - supports `query`, `city`, `latitude`, `longitude`, `radiusKm`, `openNow`, `supportsReservations`, `hasDelivery`, `page`, `pageSize`, `sortBy` and `sortDirection`
+- `GET /api/pharmacies/suggestions?q=...`
+  - public
+  - returns lightweight autocomplete items for search boxes
+- `GET /api/pharmacies/nearby-map`
+  - public
+  - returns lightweight map pin data
+  - supports `latitude`, `longitude`, `radiusKm`, `query`, `medicineQuery`, `openNow`, `supportsReservations`, `hasDelivery` and `limit`
 - `GET /api/pharmacies/{id}`
   - public
   - returns pharmacy card with contacts, hours, services, support channels and stock summary
@@ -90,6 +100,7 @@ Important details:
 - returns distance when client coordinates are provided
 - evaluates `isOpenNow` from 24/7 flag or weekly opening-hours JSON
 - includes stock summary metrics per pharmacy for consumer discovery cards
+- includes a dedicated lightweight map contract so frontends do not need to use the heavier search response for pins
 - pharmacy catalog flow prevents search results from becoming a dead end by exposing medicine browsing inside a selected pharmacy
 - uses additive geo fields and does not break existing pharmacy data contracts
 

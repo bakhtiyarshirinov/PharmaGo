@@ -188,6 +188,67 @@ public class MedicineSearchService(
         return orderedResponses;
     }
 
+    public async Task<IReadOnlyCollection<MedicineSuggestionResponse>> SuggestAsync(
+        string query,
+        int limit = 8,
+        CancellationToken cancellationToken = default)
+    {
+        var normalizedQuery = query.Trim().ToLowerInvariant();
+        var normalizedLimit = Math.Clamp(limit, 1, 20);
+        var today = DateOnly.FromDateTime(DateTime.UtcNow);
+        var scopeVersion = await cacheService.GetScopeVersionAsync(CacheScopes.MedicinesSearch, cancellationToken);
+        var cacheKey = $"medicines:suggest:v{scopeVersion}:query={normalizedQuery}:limit={normalizedLimit}";
+        var cached = await cacheService.GetAsync<IReadOnlyCollection<MedicineSuggestionResponse>>(cacheKey, cancellationToken);
+        if (cached is not null)
+        {
+            return cached;
+        }
+
+        var suggestions = await context.Medicines
+            .AsNoTracking()
+            .Where(medicine => medicine.IsActive &&
+                (EF.Functions.ILike(medicine.BrandName, $"%{normalizedQuery}%") ||
+                 EF.Functions.ILike(medicine.GenericName, $"%{normalizedQuery}%") ||
+                 (medicine.Barcode != null && EF.Functions.ILike(medicine.Barcode, $"%{normalizedQuery}%"))))
+            .Select(medicine => new MedicineSuggestionResponse
+            {
+                MedicineId = medicine.Id,
+                BrandName = medicine.BrandName,
+                GenericName = medicine.GenericName,
+                Strength = medicine.Strength,
+                DosageForm = medicine.DosageForm,
+                RequiresPrescription = medicine.RequiresPrescription,
+                MinRetailPrice = medicine.StockItems
+                    .Where(stock => stock.IsActive &&
+                        stock.ExpirationDate >= today &&
+                        stock.Quantity > stock.ReservedQuantity &&
+                        stock.Pharmacy != null &&
+                        stock.Pharmacy.IsActive)
+                    .Select(stock => (decimal?)stock.RetailPrice)
+                    .Min(),
+                PharmacyCount = medicine.StockItems
+                    .Where(stock => stock.IsActive &&
+                        stock.ExpirationDate >= today &&
+                        stock.Quantity > stock.ReservedQuantity &&
+                        stock.Pharmacy != null &&
+                        stock.Pharmacy.IsActive)
+                    .Select(stock => stock.PharmacyId)
+                    .Distinct()
+                    .Count()
+            })
+            .Where(x => x.PharmacyCount > 0)
+            .ToListAsync(cancellationToken);
+
+        suggestions = suggestions
+            .OrderBy(x => GetSuggestionRank(x.BrandName, x.GenericName, normalizedQuery))
+            .ThenBy(x => x.BrandName)
+            .Take(normalizedLimit)
+            .ToList();
+
+        await cacheService.SetAsync(cacheKey, suggestions, TimeSpan.FromMinutes(5), cancellationToken);
+        return suggestions;
+    }
+
     private static IEnumerable<MedicineAvailabilityDto> OrderAvailabilities(
         IEnumerable<MedicineAvailabilityDto> source,
         string sortBy)
@@ -274,6 +335,31 @@ public class MedicineSearchService(
         }
 
         return 5;
+    }
+
+    private static int GetSuggestionRank(string brandName, string genericName, string query)
+    {
+        if (brandName.Equals(query, StringComparison.OrdinalIgnoreCase))
+        {
+            return 0;
+        }
+
+        if (genericName.Equals(query, StringComparison.OrdinalIgnoreCase))
+        {
+            return 1;
+        }
+
+        if (brandName.StartsWith(query, StringComparison.OrdinalIgnoreCase))
+        {
+            return 2;
+        }
+
+        if (genericName.StartsWith(query, StringComparison.OrdinalIgnoreCase))
+        {
+            return 3;
+        }
+
+        return 4;
     }
 
     private sealed class SearchRow

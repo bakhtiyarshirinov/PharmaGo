@@ -1,9 +1,11 @@
 using Microsoft.AspNetCore.Mvc;
 using PharmaGo.Application.Abstractions;
 using PharmaGo.Application.Common.Contracts;
+using PharmaGo.Application.Pharmacies.Queries.GetNearbyPharmacyMap;
 using PharmaGo.Application.Pharmacies.Queries.GetPharmacyDetail;
 using PharmaGo.Application.Pharmacies.Queries.GetPharmacyMedicines;
 using PharmaGo.Application.Pharmacies.Queries.SearchNearbyPharmacies;
+using PharmaGo.Application.Pharmacies.Queries.SuggestPharmacies;
 
 namespace PharmaGo.Api.Controllers;
 
@@ -27,6 +29,45 @@ public class PharmaciesController(
         }
 
         var response = await pharmacyDiscoveryService.SearchAsync(request, cancellationToken);
+        return Ok(response);
+    }
+
+    [HttpGet("suggestions")]
+    [ProducesResponseType(typeof(IReadOnlyCollection<PharmacySuggestionResponse>), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    public async Task<ActionResult<IReadOnlyCollection<PharmacySuggestionResponse>>> Suggestions(
+        [FromQuery] string q,
+        [FromQuery] int limit,
+        CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrWhiteSpace(q))
+        {
+            return BadRequest("Query is required.");
+        }
+
+        var response = await pharmacyDiscoveryService.SuggestAsync(q, limit == 0 ? 8 : limit, cancellationToken);
+        return Ok(response);
+    }
+
+    [HttpGet("nearby-map")]
+    [ProducesResponseType(typeof(IReadOnlyCollection<NearbyPharmacyMapResponse>), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    public async Task<ActionResult<IReadOnlyCollection<NearbyPharmacyMapResponse>>> NearbyMap(
+        [FromQuery] GetNearbyPharmacyMapRequest request,
+        CancellationToken cancellationToken)
+    {
+        if ((request.Latitude.HasValue && !request.Longitude.HasValue) ||
+            (!request.Latitude.HasValue && request.Longitude.HasValue))
+        {
+            return BadRequest("Latitude and Longitude must be provided together.");
+        }
+
+        if (!request.Latitude.HasValue || !request.Longitude.HasValue)
+        {
+            return BadRequest("Latitude and Longitude are required.");
+        }
+
+        var response = await pharmacyDiscoveryService.GetMapAsync(request, cancellationToken);
         return Ok(response);
     }
 

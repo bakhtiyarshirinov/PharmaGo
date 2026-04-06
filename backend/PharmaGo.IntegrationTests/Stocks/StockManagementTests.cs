@@ -6,7 +6,9 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using PharmaGo.Application.Auth.Contracts;
 using PharmaGo.Application.Stocks.Commands.AdjustStockQuantity;
+using PharmaGo.Application.Stocks.Commands.CreateStockItem;
 using PharmaGo.Application.Stocks.Commands.ReceiveStock;
+using PharmaGo.Application.Stocks.Commands.UpdateStockItem;
 using PharmaGo.Application.Stocks.Commands.WriteOffStock;
 using PharmaGo.Application.Stocks.Queries.GetExpiringStockAlerts;
 using PharmaGo.Application.Stocks.Queries.GetOutOfStockAlerts;
@@ -55,6 +57,30 @@ public class StockManagementTests(CustomWebApplicationFactory factory) : IClassF
         Assert.NotNull(payload);
         Assert.Equal(initialQuantity - 3, payload!.Quantity);
         Assert.NotNull(payload.LastStockUpdatedAtUtc);
+    }
+
+    [Fact]
+    public async Task Adjust_ShouldRequireReason()
+    {
+        await AuthorizePharmacistAsync();
+
+        Guid stockItemId;
+        using (var scope = factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+            stockItemId = await db.StockItems
+                .Include(x => x.Pharmacy)
+                .Where(x => x.Pharmacy!.Name == "PharmaGo Central" && x.Quantity >= 10)
+                .Select(x => x.Id)
+                .FirstAsync();
+        }
+
+        var response = await _client.PostAsJsonAsync($"/api/stocks/{stockItemId}/adjust", new AdjustStockQuantityRequest
+        {
+            QuantityDelta = -1
+        });
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
     }
 
     [Fact]
@@ -156,6 +182,95 @@ public class StockManagementTests(CustomWebApplicationFactory factory) : IClassF
             Reason = "Broken seal"
         });
 
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task WriteOff_ShouldRequireReason()
+    {
+        await AuthorizePharmacistAsync();
+
+        Guid stockItemId;
+        using (var scope = factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+            stockItemId = await db.StockItems
+                .Include(x => x.Pharmacy)
+                .Where(x => x.Pharmacy!.Name == "PharmaGo Central" && x.Quantity >= 3)
+                .Select(x => x.Id)
+                .FirstAsync();
+        }
+
+        var response = await _client.PostAsJsonAsync($"/api/stocks/{stockItemId}/writeoff", new WriteOffStockRequest
+        {
+            Quantity = 1
+        });
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task Create_ShouldRejectExpiredBatch()
+    {
+        await AuthorizePharmacistAsync();
+
+        Guid pharmacyId;
+        Guid medicineId;
+
+        using (var scope = factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+            pharmacyId = await db.Pharmacies.Where(x => x.Name == "PharmaGo Central").Select(x => x.Id).FirstAsync();
+            medicineId = await db.Medicines.Where(x => x.BrandName == "Panadol").Select(x => x.Id).FirstAsync();
+        }
+
+        var response = await _client.PostAsJsonAsync("/api/stocks", new CreateStockItemRequest
+        {
+            PharmacyId = pharmacyId,
+            MedicineId = medicineId,
+            BatchNumber = "EXPIRED-BATCH-001",
+            ExpirationDate = DateOnly.FromDateTime(DateTime.UtcNow).AddDays(-1),
+            Quantity = 10,
+            PurchasePrice = 1.00m,
+            RetailPrice = 1.50m,
+            ReorderLevel = 3
+        });
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task Update_ShouldRejectDeactivation_WhenReservedQuantityExists()
+    {
+        await AuthorizePharmacistAsync();
+
+        Guid stockItemId;
+        UpdateStockItemRequest request;
+
+        using (var scope = factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+            var stockItem = await db.StockItems
+                .Include(x => x.Pharmacy)
+                .FirstAsync(x => x.Pharmacy!.Name == "PharmaGo Central" && x.Quantity >= 5);
+
+            stockItem.ReservedQuantity = 2;
+            await db.SaveChangesAsync();
+
+            stockItemId = stockItem.Id;
+            request = new UpdateStockItemRequest
+            {
+                BatchNumber = stockItem.BatchNumber,
+                ExpirationDate = stockItem.ExpirationDate,
+                Quantity = stockItem.Quantity,
+                PurchasePrice = stockItem.PurchasePrice,
+                RetailPrice = stockItem.RetailPrice,
+                ReorderLevel = stockItem.ReorderLevel,
+                IsActive = false
+            };
+        }
+
+        var response = await _client.PutAsJsonAsync($"/api/stocks/{stockItemId}", request);
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
     }
 
@@ -356,6 +471,69 @@ public class StockManagementTests(CustomWebApplicationFactory factory) : IClassF
         Assert.Equal("PharmaGo Central", alert.PharmacyName);
         Assert.InRange(alert.DaysUntilExpiration, 0, 10);
         Assert.Equal(7, alert.Quantity);
+    }
+
+    [Fact]
+    public async Task LowStockAlerts_ShouldIgnoreExpiredBatches()
+    {
+        await AuthorizePharmacistAsync();
+
+        Guid expiredStockItemId;
+
+        using (var scope = factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+            var stockItem = await db.StockItems
+                .Include(x => x.Pharmacy)
+                .FirstAsync(x => x.Pharmacy!.Name == "PharmaGo Central" && x.Quantity >= 1);
+
+            stockItem.Quantity = 1;
+            stockItem.ReservedQuantity = 0;
+            stockItem.ReorderLevel = 5;
+            stockItem.ExpirationDate = DateOnly.FromDateTime(DateTime.UtcNow).AddDays(-1);
+            await db.SaveChangesAsync();
+            expiredStockItemId = stockItem.Id;
+        }
+
+        var response = await _client.GetAsync("/api/stocks/alerts/low-stock");
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        var payload = await response.Content.ReadAsAsync<IReadOnlyCollection<PharmaGo.Application.Stocks.Queries.GetLowStockAlerts.LowStockAlertResponse>>();
+        Assert.NotNull(payload);
+        Assert.DoesNotContain(payload!, x => x.StockItemId == expiredStockItemId);
+    }
+
+    [Fact]
+    public async Task RestockSuggestions_ShouldIgnoreExpiredLowStockBatches()
+    {
+        await AuthorizePharmacistAsync();
+
+        using (var scope = factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+            var stockItems = await db.StockItems
+                .Include(x => x.Pharmacy)
+                .Include(x => x.Medicine)
+                .Where(x => x.Pharmacy!.Name == "PharmaGo Central" && x.Medicine!.BrandName == "Panadol")
+                .ToListAsync();
+
+            foreach (var stockItem in stockItems)
+            {
+                stockItem.Quantity = 1;
+                stockItem.ReservedQuantity = 0;
+                stockItem.ReorderLevel = 5;
+                stockItem.ExpirationDate = DateOnly.FromDateTime(DateTime.UtcNow).AddDays(-1);
+            }
+
+            await db.SaveChangesAsync();
+        }
+
+        var response = await _client.GetAsync("/api/stocks/alerts/restock-suggestions");
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        var payload = await response.Content.ReadAsAsync<IReadOnlyCollection<PharmaGo.Application.Stocks.Queries.GetRestockSuggestions.RestockSuggestionResponse>>();
+        Assert.NotNull(payload);
+        Assert.DoesNotContain(payload!, x => x.MedicineName == "Panadol");
     }
 
     private async Task AuthorizePharmacistAsync()

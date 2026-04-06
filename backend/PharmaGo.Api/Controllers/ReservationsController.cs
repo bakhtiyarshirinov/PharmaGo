@@ -802,6 +802,17 @@ public class ReservationsController(
                 }
 
                 previousStatus = reservation.Status;
+
+                if (nextStatus == ReservationStatus.Completed &&
+                    reservation.PickupAvailableFromUtc.HasValue &&
+                    reservation.PickupAvailableFromUtc.Value > DateTime.UtcNow)
+                {
+                    throw new ReservationRequestException(
+                        StatusCodes.Status422UnprocessableEntity,
+                        "Reservation cannot be completed before the pickup window opens.",
+                        "reservation_pickup_not_available_yet");
+                }
+
                 reservation.Status = nextStatus;
 
                 ApplyLifecycleTimestamps(reservation, nextStatus);

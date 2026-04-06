@@ -46,10 +46,12 @@ public class StocksController(
         }
 
         var effectivePharmacyId = scopeResult.PharmacyId;
+        var today = DateOnly.FromDateTime(DateTime.UtcNow);
 
         var lowStockItems = await context.StockItems
             .AsNoTracking()
             .Where(x => x.IsActive &&
+                x.ExpirationDate >= today &&
                 (!effectivePharmacyId.HasValue || x.PharmacyId == effectivePharmacyId.Value) &&
                 (x.Quantity - x.ReservedQuantity) <= x.ReorderLevel)
             .OrderBy(x => x.Pharmacy!.Name)
@@ -217,10 +219,12 @@ public class StocksController(
         }
 
         var effectivePharmacyId = scopeResult.PharmacyId;
+        var today = DateOnly.FromDateTime(DateTime.UtcNow);
 
         var lowStockItems = await context.StockItems
             .AsNoTracking()
             .Where(x => x.IsActive &&
+                x.ExpirationDate >= today &&
                 (!effectivePharmacyId.HasValue || x.PharmacyId == effectivePharmacyId.Value) &&
                 (x.Quantity - x.ReservedQuantity) <= x.ReorderLevel)
             .Select(x => new
@@ -369,6 +373,7 @@ public class StocksController(
     {
         var validationError = ValidateStockRequest(
             request.BatchNumber,
+            request.ExpirationDate,
             request.Quantity,
             request.PurchasePrice,
             request.RetailPrice,
@@ -474,9 +479,15 @@ public class StocksController(
         [FromBody] AdjustStockQuantityRequest request,
         CancellationToken cancellationToken)
     {
+        var normalizedReason = NormalizeReason(request.Reason);
         if (request.QuantityDelta == 0)
         {
             return ApiValidationProblem("stock_adjustment_invalid", "QuantityDelta must not be zero.");
+        }
+
+        if (normalizedReason is null)
+        {
+            return ApiValidationProblem("stock_adjustment_reason_required", "Reason is required for stock adjustments.");
         }
 
         var stockItem = await LoadStockItemAsync(id, cancellationToken);
@@ -504,7 +515,6 @@ public class StocksController(
 
         var wasLowStock = stockItem.IsLowStock;
         var beforeSnapshot = CreateStockAuditSnapshot(stockItem);
-        var normalizedReason = NormalizeReason(request.Reason);
         stockItem.Quantity = updatedQuantity;
 
         return await SaveStockMutationAsync(
@@ -554,6 +564,11 @@ public class StocksController(
         if (accessResult is not null)
         {
             return accessResult;
+        }
+
+        if (stockItem.ExpirationDate < DateOnly.FromDateTime(DateTime.UtcNow))
+        {
+            return ApiValidationProblem("stock_receive_expired_batch", "Cannot receive stock into an expired batch.");
         }
 
         var wasLowStock = stockItem.IsLowStock;
@@ -613,9 +628,15 @@ public class StocksController(
         [FromBody] WriteOffStockRequest request,
         CancellationToken cancellationToken)
     {
+        var normalizedReason = NormalizeReason(request.Reason);
         if (request.Quantity <= 0)
         {
             return ApiValidationProblem("stock_writeoff_invalid", "Quantity must be greater than zero.");
+        }
+
+        if (normalizedReason is null)
+        {
+            return ApiValidationProblem("stock_writeoff_reason_required", "Reason is required for stock write-off.");
         }
 
         var stockItem = await LoadStockItemAsync(id, cancellationToken);
@@ -638,7 +659,6 @@ public class StocksController(
         var wasLowStock = stockItem.IsLowStock;
         var beforeSnapshot = CreateStockAuditSnapshot(stockItem);
         var previousQuantity = stockItem.Quantity;
-        var normalizedReason = NormalizeReason(request.Reason);
         stockItem.Quantity -= request.Quantity;
 
         return await SaveStockMutationAsync(
@@ -675,6 +695,7 @@ public class StocksController(
     {
         var validationError = ValidateStockRequest(
             request.BatchNumber,
+            request.ExpirationDate,
             request.Quantity,
             request.PurchasePrice,
             request.RetailPrice,
@@ -704,6 +725,11 @@ public class StocksController(
         if (request.Quantity < stockItem.ReservedQuantity)
         {
             return ApiValidationProblem("stock_quantity_reserved_conflict", "Quantity cannot be lower than the currently reserved quantity.");
+        }
+
+        if (!request.IsActive && stockItem.ReservedQuantity > 0)
+        {
+            return ApiValidationProblem("stock_active_reserved_conflict", "Stock item with reserved quantity cannot be deactivated.");
         }
 
         var wasLowStock = stockItem.IsLowStock;
@@ -822,6 +848,7 @@ public class StocksController(
 
     private static string? ValidateStockRequest(
         string batchNumber,
+        DateOnly expirationDate,
         int quantity,
         decimal purchasePrice,
         decimal retailPrice,
@@ -835,6 +862,11 @@ public class StocksController(
         if (quantity < 0)
         {
             return "Quantity cannot be negative.";
+        }
+
+        if (expirationDate < DateOnly.FromDateTime(DateTime.UtcNow))
+        {
+            return "ExpirationDate cannot be in the past.";
         }
 
         if (purchasePrice < 0 || retailPrice < 0)

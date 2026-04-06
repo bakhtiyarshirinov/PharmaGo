@@ -366,6 +366,75 @@ public class ReservationFlowTests(CustomWebApplicationFactory factory) : IClassF
     }
 
     [Fact]
+    public async Task Pharmacist_ShouldNotCompleteReservation_BeforePickupWindowOpens()
+    {
+        using var scope = factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+        var pharmacy = await db.Pharmacies.FirstAsync(x => x.Name == "PharmaGo Central");
+        var stockItem = await db.StockItems.FirstAsync(x => x.PharmacyId == pharmacy.Id && x.Quantity >= 1);
+
+        pharmacy.IsOpen24Hours = false;
+        pharmacy.OpeningHoursJson = """
+        {
+          "timeZone": "Asia/Baku",
+          "weekly": [
+            { "day": "mon", "open": "23:58", "close": "23:59" },
+            { "day": "tue", "open": "23:58", "close": "23:59" },
+            { "day": "wed", "open": "23:58", "close": "23:59" },
+            { "day": "thu", "open": "23:58", "close": "23:59" },
+            { "day": "fri", "open": "23:58", "close": "23:59" },
+            { "day": "sat", "open": "23:58", "close": "23:59" },
+            { "day": "sun", "open": "23:58", "close": "23:59" }
+          ]
+        }
+        """;
+        await db.SaveChangesAsync();
+
+        var userAuth = await RegisterAndAuthorizeAsync(_client, "+994551110021", "pickup-window@example.com");
+        Assert.NotNull(userAuth);
+
+        var createResponse = await _client.PostAsJsonAsync("/api/reservations", new CreateReservationRequest
+        {
+            PharmacyId = pharmacy.Id,
+            ReserveForHours = 2,
+            Items =
+            [
+                new CreateReservationItemRequest
+                {
+                    MedicineId = stockItem.MedicineId,
+                    Quantity = 1
+                }
+            ]
+        });
+
+        Assert.Equal(HttpStatusCode.Created, createResponse.StatusCode);
+        var reservation = await createResponse.Content.ReadAsAsync<ReservationResponse>();
+        Assert.NotNull(reservation);
+        Assert.NotNull(reservation!.PickupAvailableFromUtc);
+        Assert.True(reservation.PickupAvailableFromUtc > DateTime.UtcNow);
+
+        var pharmacistLogin = await _client.PostAsJsonAsync("/api/auth/login", new LoginRequest
+        {
+            PhoneNumber = "+994500000001",
+            Password = "Pharmacist123!"
+        });
+
+        var pharmacistAuth = await pharmacistLogin.Content.ReadAsAsync<AuthResponse>();
+        Assert.NotNull(pharmacistAuth);
+        _client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", pharmacistAuth!.AccessToken);
+
+        var readyResponse = await _client.PostAsync($"/api/reservations/{reservation.ReservationId}/ready-for-pickup", null);
+        Assert.Equal(HttpStatusCode.OK, readyResponse.StatusCode);
+
+        var completeResponse = await _client.PostAsync($"/api/reservations/{reservation.ReservationId}/complete", null);
+        Assert.Equal((HttpStatusCode)422, completeResponse.StatusCode);
+
+        var problem = await completeResponse.Content.ReadFromJsonAsync<ProblemDetails>();
+        Assert.NotNull(problem);
+        Assert.Equal("reservation_pickup_not_available_yet", problem!.Extensions["code"]?.ToString());
+    }
+
+    [Fact]
     public async Task User_ShouldCancelOwnReservation_UsingExplicitCommand_AndReleaseStock()
     {
         using var scope = factory.Services.CreateScope();

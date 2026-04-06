@@ -312,6 +312,7 @@ Important details:
 - active reservations exclude already elapsed holds even if background expiration has not run yet
 - limits each user to at most `3` active reservations in `Pending`, `Confirmed` or `ReadyForPickup`
 - allows reservation creation while the pharmacy is closed and exposes `PickupAvailableFromUtc` as the next pickup moment
+- blocks reservation completion before the pickup window opens
 - timeline is built from reservation audit events and exposes actor, description and resolved status
 - sends SignalR events on create and status changes
 - publishes low-stock notifications when reservations reduce availability
@@ -409,11 +410,15 @@ Important details:
 - pharmacists are restricted to their own pharmacy
 - moderators can work across all pharmacies
 - explicit inventory commands write separate audit actions for adjustment, receiving and write-off
+- `adjust` and `writeoff` require an explicit reason
 - write-off cannot exceed currently available non-reserved stock
 - out-of-stock alerts are aggregated per pharmacy and medicine across active non-expired batches
+- low-stock and restock-suggestion alerts also ignore expired batches
 - expiring alerts support a bounded `days` query window from 1 to 180
 - prevents duplicate `(pharmacy, medicine, batch)` records
+- rejects stock create/update for already expired batches
 - prevents reducing quantity below already reserved amount
+- prevents deactivating a stock item that still has reserved quantity
 - returns `409 Conflict` when the stock row changed during an update
 - picks the cheapest available supplier option per medicine
 - respects supplier minimum order quantity and supplier availability

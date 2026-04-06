@@ -93,6 +93,7 @@ Workflow rules:
 - one user can have at most `3` active reservations at the same time
 - reservations can be created while the pharmacy is closed, but pickup is only available from the next opening time
 - reservation responses expose `PickupAvailableFromUtc` so clients can show the earliest pickup moment
+- reservation completion is blocked until `PickupAvailableFromUtc`
 - invalid lifecycle transitions now return `422 Unprocessable Entity` with problem details payload
 - background worker expires overdue reservations automatically
 - notification core writes delivery logs and sends in-app reservation events based on user preferences
@@ -114,6 +115,7 @@ Workflow rules:
 - moderators can manage pharmacy profiles and opening-hours schedules through dedicated admin endpoints
 - inventory staff flows support explicit `adjust`, `receive` and `writeoff` commands in addition to the generic stock update endpoint
 - stock alerts cover `low-stock`, `restock-suggestions`, `out-of-stock` and `expiring`
+- expired batches are rejected on stock create/update and ignored by low-stock and restock-suggestion alerts
 
 Read these next:
 

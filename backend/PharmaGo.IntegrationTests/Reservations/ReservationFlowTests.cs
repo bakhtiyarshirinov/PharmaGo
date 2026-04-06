@@ -67,9 +67,112 @@ public class ReservationFlowTests(CustomWebApplicationFactory factory) : IClassF
         Assert.NotNull(payload);
         Assert.Equal(ReservationStatus.Confirmed, payload!.Status);
         Assert.Single(payload.Items);
+        Assert.NotNull(payload.PickupAvailableFromUtc);
 
         var updatedStock = await db.StockItems.AsNoTracking().FirstAsync(x => x.Id == stockItem.Id);
         Assert.Equal(2, updatedStock.ReservedQuantity);
+    }
+
+    [Fact]
+    public async Task CreateReservation_ShouldReject_WhenUserAlreadyHasThreeActiveReservations()
+    {
+        using var scope = factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+        var pharmacy = await db.Pharmacies.FirstAsync(x => x.Name == "PharmaGo Central");
+        var stockItem = await db.StockItems.FirstAsync(x => x.PharmacyId == pharmacy.Id && x.Quantity >= 4);
+
+        var auth = await RegisterAndAuthorizeAsync(_client, "+994551110019", "reservation-limit@example.com");
+        Assert.NotNull(auth);
+
+        for (var attempt = 0; attempt < 3; attempt++)
+        {
+            var createResponse = await _client.PostAsJsonAsync("/api/reservations", new CreateReservationRequest
+            {
+                PharmacyId = pharmacy.Id,
+                ReserveForHours = 2,
+                Items =
+                [
+                    new CreateReservationItemRequest
+                    {
+                        MedicineId = stockItem.MedicineId,
+                        Quantity = 1
+                    }
+                ]
+            });
+
+            Assert.Equal(HttpStatusCode.Created, createResponse.StatusCode);
+        }
+
+        var limitedResponse = await _client.PostAsJsonAsync("/api/reservations", new CreateReservationRequest
+        {
+            PharmacyId = pharmacy.Id,
+            ReserveForHours = 2,
+            Items =
+            [
+                new CreateReservationItemRequest
+                {
+                    MedicineId = stockItem.MedicineId,
+                    Quantity = 1
+                }
+            ]
+        });
+
+        Assert.Equal((HttpStatusCode)422, limitedResponse.StatusCode);
+
+        var problem = await limitedResponse.Content.ReadFromJsonAsync<ProblemDetails>();
+        Assert.NotNull(problem);
+        Assert.Equal("reservation_active_limit_reached", problem!.Extensions["code"]?.ToString());
+    }
+
+    [Fact]
+    public async Task CreateReservation_ShouldExposePickupAvailableFromUtc_WhenPharmacyIsClosed()
+    {
+        using var scope = factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+        var pharmacy = await db.Pharmacies.FirstAsync(x => x.Name == "PharmaGo Central");
+        var stockItem = await db.StockItems.FirstAsync(x => x.PharmacyId == pharmacy.Id && x.Quantity >= 1);
+
+        pharmacy.IsOpen24Hours = false;
+        pharmacy.OpeningHoursJson = """
+        {
+          "timeZone": "UTC",
+          "weekly": [
+            { "day": "mon", "open": "23:59", "close": "23:59" },
+            { "day": "tue", "open": "23:59", "close": "23:59" },
+            { "day": "wed", "open": "23:59", "close": "23:59" },
+            { "day": "thu", "open": "23:59", "close": "23:59" },
+            { "day": "fri", "open": "23:59", "close": "23:59" },
+            { "day": "sat", "open": "23:59", "close": "23:59" },
+            { "day": "sun", "open": "23:59", "close": "23:59" }
+          ]
+        }
+        """;
+        await db.SaveChangesAsync();
+
+        var auth = await RegisterAndAuthorizeAsync(_client, "+994551110020", "closed-pharmacy@example.com");
+        Assert.NotNull(auth);
+
+        var beforeCreate = DateTime.UtcNow;
+        var createResponse = await _client.PostAsJsonAsync("/api/reservations", new CreateReservationRequest
+        {
+            PharmacyId = pharmacy.Id,
+            ReserveForHours = 2,
+            Items =
+            [
+                new CreateReservationItemRequest
+                {
+                    MedicineId = stockItem.MedicineId,
+                    Quantity = 1
+                }
+            ]
+        });
+
+        Assert.Equal(HttpStatusCode.Created, createResponse.StatusCode);
+
+        var reservation = await createResponse.Content.ReadAsAsync<ReservationResponse>();
+        Assert.NotNull(reservation);
+        Assert.NotNull(reservation!.PickupAvailableFromUtc);
+        Assert.True(reservation.PickupAvailableFromUtc > beforeCreate);
     }
 
     [Fact]

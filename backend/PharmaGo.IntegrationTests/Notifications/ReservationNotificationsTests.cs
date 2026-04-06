@@ -76,7 +76,7 @@ public class ReservationNotificationsTests(CustomWebApplicationFactory factory) 
     }
 
     [Fact]
-    public async Task ExpiringSoonDispatch_ShouldHonorPreferences_AndSendOnlyOnce()
+    public async Task ExpiringSoonDispatch_ShouldHonorPreferences_AndSendReminderStages()
     {
         using var scope = factory.Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
@@ -100,7 +100,7 @@ public class ReservationNotificationsTests(CustomWebApplicationFactory factory) 
         var createResponse = await _client.PostAsJsonAsync("/api/reservations", new CreateReservationRequest
         {
             PharmacyId = pharmacy.Id,
-            ReserveForHours = 1,
+            ReserveForHours = 2,
             Items =
             [
                 new CreateReservationItemRequest
@@ -115,23 +115,38 @@ public class ReservationNotificationsTests(CustomWebApplicationFactory factory) 
         Assert.NotNull(reservation);
 
         var trackedReservation = await db.Reservations.FirstAsync(x => x.Id == reservation!.ReservationId);
-        trackedReservation.ReservedUntilUtc = DateTime.UtcNow.AddMinutes(15);
-        await db.SaveChangesAsync();
-
         var notificationService = scope.ServiceProvider.GetRequiredService<IReservationNotificationService>();
+        trackedReservation.ReservedUntilUtc = DateTime.UtcNow.AddMinutes(44);
+        await db.SaveChangesAsync();
         var firstDispatch = await notificationService.DispatchExpiringSoonNotificationsAsync();
+
+        trackedReservation = await db.Reservations.FirstAsync(x => x.Id == reservation.ReservationId);
+        trackedReservation.ReservedUntilUtc = DateTime.UtcNow.AddMinutes(29);
+        await db.SaveChangesAsync();
         var secondDispatch = await notificationService.DispatchExpiringSoonNotificationsAsync();
 
+        trackedReservation = await db.Reservations.FirstAsync(x => x.Id == reservation.ReservationId);
+        trackedReservation.ReservedUntilUtc = DateTime.UtcNow.AddMinutes(14);
+        await db.SaveChangesAsync();
+        var thirdDispatch = await notificationService.DispatchExpiringSoonNotificationsAsync();
+
+        var duplicateDispatch = await notificationService.DispatchExpiringSoonNotificationsAsync();
+
         Assert.Equal(1, firstDispatch);
-        Assert.Equal(0, secondDispatch);
+        Assert.Equal(1, secondDispatch);
+        Assert.Equal(1, thirdDispatch);
+        Assert.Equal(0, duplicateDispatch);
 
         var logs = await db.NotificationDeliveryLogs
             .AsNoTracking()
             .Where(x => x.ReservationId == reservation.ReservationId && x.EventType == NotificationEventType.ReservationExpiringSoon)
             .ToListAsync();
 
-        Assert.Single(logs);
-        Assert.Equal(NotificationDeliveryStatus.Sent, logs[0].Status);
+        Assert.Equal(3, logs.Count);
+        Assert.All(logs, log => Assert.Equal(NotificationDeliveryStatus.Sent, log.Status));
+        Assert.Contains(logs, log => log.DeliveryKey == "reservation-expiring-soon:45");
+        Assert.Contains(logs, log => log.DeliveryKey == "reservation-expiring-soon:30");
+        Assert.Contains(logs, log => log.DeliveryKey == "reservation-expiring-soon:15");
     }
 
     private static async Task<AuthResponse?> RegisterAndAuthorizeAsync(HttpClient client, string phoneNumber, string email)

@@ -26,9 +26,13 @@ public class NotificationDeliveryLogConfiguration : IEntityTypeConfiguration<Not
         builder.Property(x => x.ErrorMessage)
             .HasMaxLength(1000);
 
+        builder.Property(x => x.DeliveryKey)
+            .HasMaxLength(200);
+
         builder.HasIndex(x => new { x.UserId, x.EventType, x.Channel, x.CreatedAtUtc });
         builder.HasIndex(x => new { x.ReservationId, x.EventType, x.Channel });
         builder.HasIndex(x => new { x.UserId, x.Status, x.ReadAtUtc, x.CreatedAtUtc });
+        builder.HasIndex(x => new { x.UserId, x.ReservationId, x.Channel, x.DeliveryKey });
 
         builder.HasOne(x => x.User)
             .WithMany(x => x.NotificationDeliveryLogs)

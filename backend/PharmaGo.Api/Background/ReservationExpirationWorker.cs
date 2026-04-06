@@ -89,6 +89,7 @@ public class ReservationExpirationWorker(
                 PhoneNumber = reservation.Customer?.PhoneNumber ?? string.Empty,
                 CreatedAtUtc = reservation.CreatedAtUtc,
                 ReservedUntilUtc = reservation.ReservedUntilUtc,
+                PickupAvailableFromUtc = reservation.PickupAvailableFromUtc,
                 ConfirmedAtUtc = reservation.ConfirmedAtUtc,
                 ReadyForPickupAtUtc = reservation.ReadyForPickupAtUtc,
                 CompletedAtUtc = reservation.CompletedAtUtc,

@@ -50,30 +50,50 @@ public class ReservationNotificationService(
                 reservation.ReservationNumber,
                 Status = reservation.Status.ToString(),
                 reservation.ReservedUntilUtc,
+                reservation.PickupAvailableFromUtc,
                 reservation.PharmacyId,
                 PharmacyName = reservation.Pharmacy?.Name
             },
+            null,
             cancellationToken);
     }
 
     public async Task<int> DispatchExpiringSoonNotificationsAsync(CancellationToken cancellationToken = default)
     {
         var now = DateTime.UtcNow;
-        var reminderBoundary = now.AddMinutes(Math.Max(5, _settings.ExpiringSoonLeadMinutes));
+        var reminderOffsets = _settings.ExpiringSoonReminderMinutes
+            .Where(x => x > 0)
+            .Distinct()
+            .OrderByDescending(x => x)
+            .ToArray();
+
+        if (reminderOffsets.Length == 0)
+        {
+            return 0;
+        }
 
         var reservations = await context.Reservations
             .AsNoTracking()
             .Include(x => x.Pharmacy)
             .Where(x =>
                 (x.Status == ReservationStatus.Confirmed || x.Status == ReservationStatus.ReadyForPickup) &&
-                x.ReservedUntilUtc > now &&
-                x.ReservedUntilUtc <= reminderBoundary)
+                x.ReservedUntilUtc > now)
             .ToListAsync(cancellationToken);
 
         var dispatched = 0;
 
         foreach (var reservation in reservations)
         {
+            var remainingMinutes = (reservation.ReservedUntilUtc - now).TotalMinutes;
+            var dueOffset = reminderOffsets
+                .FirstOrDefault(offset => remainingMinutes <= offset && remainingMinutes > Math.Max(0, offset - 5));
+
+            if (dueOffset <= 0)
+            {
+                continue;
+            }
+
+            var deliveryKey = $"reservation-expiring-soon:{dueOffset}";
             var alreadySent = await context.NotificationDeliveryLogs
                 .AsNoTracking()
                 .AnyAsync(x =>
@@ -81,7 +101,8 @@ public class ReservationNotificationService(
                     x.ReservationId == reservation.Id &&
                     x.EventType == NotificationEventType.ReservationExpiringSoon &&
                     x.Channel == NotificationChannel.InApp &&
-                    x.Status == NotificationDeliveryStatus.Sent,
+                    x.Status == NotificationDeliveryStatus.Sent &&
+                    x.DeliveryKey == deliveryKey,
                     cancellationToken);
 
             if (alreadySent)
@@ -94,16 +115,19 @@ public class ReservationNotificationService(
                 reservation.Id,
                 NotificationEventType.ReservationExpiringSoon,
                 "Reservation expiring soon",
-                $"Reservation {reservation.ReservationNumber} at {reservation.Pharmacy?.Name ?? "your pharmacy"} expires at {reservation.ReservedUntilUtc:HH:mm} UTC.",
+                $"Reservation {reservation.ReservationNumber} at {reservation.Pharmacy?.Name ?? "your pharmacy"} expires in {dueOffset} minutes.",
                 new
                 {
                     reservation.Id,
                     reservation.ReservationNumber,
                     Status = reservation.Status.ToString(),
+                    ReminderMinutes = dueOffset,
                     reservation.ReservedUntilUtc,
+                    reservation.PickupAvailableFromUtc,
                     reservation.PharmacyId,
                     PharmacyName = reservation.Pharmacy?.Name
                 },
+                deliveryKey,
                 cancellationToken);
 
             dispatched++;
@@ -119,6 +143,7 @@ public class ReservationNotificationService(
         string title,
         string message,
         object payload,
+        string? deliveryKey,
         CancellationToken cancellationToken)
     {
         var user = await context.Users
@@ -147,7 +172,7 @@ public class ReservationNotificationService(
 
         if (!inAppAllowed)
         {
-            await WriteLogAsync(userId, reservationId, eventType, NotificationChannel.InApp, NotificationDeliveryStatus.Skipped, title, message, payload, null, cancellationToken);
+            await WriteLogAsync(userId, reservationId, eventType, NotificationChannel.InApp, NotificationDeliveryStatus.Skipped, title, message, payload, deliveryKey, null, cancellationToken);
             return;
         }
 
@@ -165,11 +190,11 @@ public class ReservationNotificationService(
             };
 
             await realtimeNotificationService.NotifyUserNotificationAsync(userId, notificationPayload, cancellationToken);
-            await WriteLogAsync(userId, reservationId, eventType, NotificationChannel.InApp, NotificationDeliveryStatus.Sent, title, message, payload, null, cancellationToken);
+            await WriteLogAsync(userId, reservationId, eventType, NotificationChannel.InApp, NotificationDeliveryStatus.Sent, title, message, payload, deliveryKey, null, cancellationToken);
         }
         catch (Exception exception)
         {
-            await WriteLogAsync(userId, reservationId, eventType, NotificationChannel.InApp, NotificationDeliveryStatus.Failed, title, message, payload, exception.Message, cancellationToken);
+            await WriteLogAsync(userId, reservationId, eventType, NotificationChannel.InApp, NotificationDeliveryStatus.Failed, title, message, payload, deliveryKey, exception.Message, cancellationToken);
         }
     }
 
@@ -182,6 +207,7 @@ public class ReservationNotificationService(
         string title,
         string message,
         object payload,
+        string? deliveryKey,
         string? errorMessage,
         CancellationToken cancellationToken)
     {
@@ -192,6 +218,7 @@ public class ReservationNotificationService(
             EventType = eventType,
             Channel = channel,
             Status = status,
+            DeliveryKey = deliveryKey,
             Title = title,
             Message = message,
             PayloadJson = JsonSerializer.Serialize(payload),

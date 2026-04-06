@@ -2,11 +2,13 @@ using Asp.Versioning;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
 using Npgsql;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using PharmaGo.Api.Realtime;
+using PharmaGo.Api.Reservations;
 using PharmaGo.Application.Abstractions;
 using PharmaGo.Application.Reservations.Commands.CreateReservation;
 using PharmaGo.Application.Reservations.Commands.UpdateReservationStatus;
@@ -18,6 +20,7 @@ using PharmaGo.Domain.Models.Enums;
 using PharmaGo.Infrastructure.Caching;
 using PharmaGo.Infrastructure.Auth;
 using PharmaGo.Infrastructure.Persistence;
+using PharmaGo.Infrastructure.Services;
 
 namespace PharmaGo.Api.Controllers;
 
@@ -33,9 +36,11 @@ public class ReservationsController(
     IReservationNotificationService reservationNotificationService,
     IReservationStateService reservationStateService,
     IReservationTransitionPolicy reservationTransitionPolicy,
-    RealtimeNotificationService realtimeNotificationService) : ApiControllerBase
+    RealtimeNotificationService realtimeNotificationService,
+    IOptions<ReservationPolicySettings> reservationPolicyOptions) : ApiControllerBase
 {
     private const string IdempotencyKeyHeaderName = "Idempotency-Key";
+    private readonly ReservationPolicySettings _reservationPolicy = reservationPolicyOptions.Value;
 
     [Authorize(Policy = PolicyNames.ReadOwnReservations)]
     [HttpGet("my")]
@@ -255,9 +260,11 @@ public class ReservationsController(
             return ValidationProblemResponse("reservation_validation_error", "Reservation item quantities must be greater than zero.");
         }
 
-        if (request.ReserveForHours <= 0 || request.ReserveForHours > 24)
+        if (request.ReserveForHours != _reservationPolicy.ReservationLifetimeHours)
         {
-            return ValidationProblemResponse("reservation_validation_error", "ReserveForHours must be between 1 and 24.");
+            return ValidationProblemResponse(
+                "reservation_validation_error",
+                $"Reservations are held for exactly {_reservationPolicy.ReservationLifetimeHours} hours.");
         }
 
         if (!currentUserService.UserId.HasValue)
@@ -350,7 +357,16 @@ public class ReservationsController(
                     throw new ReservationRequestException(StatusCodes.Status404NotFound, "Pharmacy was not found.", "reservation_pharmacy_not_found");
                 }
 
-                var requestedMedicineIds = request.Items.Select(item => item.MedicineId).Distinct().ToArray();
+                var requestedItems = request.Items
+                    .GroupBy(item => item.MedicineId)
+                    .Select(group => new
+                    {
+                        MedicineId = group.Key,
+                        Quantity = group.Sum(x => x.Quantity)
+                    })
+                    .ToArray();
+
+                var requestedMedicineIds = requestedItems.Select(item => item.MedicineId).ToArray();
                 var today = DateOnly.FromDateTime(DateTime.UtcNow);
 
                 var stockItems = await context.StockItems
@@ -366,7 +382,7 @@ public class ReservationsController(
 
                 var stockByMedicine = stockItems.GroupBy(x => x.MedicineId).ToDictionary(group => group.Key, group => group.ToList());
 
-                foreach (var item in request.Items)
+                foreach (var item in requestedItems)
                 {
                     if (!stockByMedicine.TryGetValue(item.MedicineId, out var medicineStock))
                     {
@@ -395,6 +411,33 @@ public class ReservationsController(
                     throw new ReservationRequestException(StatusCodes.Status401Unauthorized, "User is not authorized.", "reservation_unauthorized");
                 }
 
+                var now = DateTime.UtcNow;
+                var activeStatuses = new[]
+                {
+                    ReservationStatus.Pending,
+                    ReservationStatus.Confirmed,
+                    ReservationStatus.ReadyForPickup
+                };
+
+                var activeReservationCount = await context.Reservations.CountAsync(
+                    x => x.CustomerId == customer.Id &&
+                         activeStatuses.Contains(x.Status) &&
+                         x.ReservedUntilUtc > now,
+                    cancellationToken);
+
+                if (activeReservationCount >= _reservationPolicy.MaxActiveReservationsPerUser)
+                {
+                    throw new ReservationRequestException(
+                        StatusCodes.Status422UnprocessableEntity,
+                        $"A user can have at most {_reservationPolicy.MaxActiveReservationsPerUser} active reservations.",
+                        "reservation_active_limit_reached");
+                }
+
+                var pickupAvailableFromUtc = PharmacyDiscoverySupport.GetPickupAvailableFromUtc(
+                    pharmacy.IsOpen24Hours,
+                    pharmacy.OpeningHoursJson,
+                    now);
+
                 var reservation = new Reservation
                 {
                     ReservationNumber = GenerateReservationNumber(),
@@ -402,14 +445,15 @@ public class ReservationsController(
                     Pharmacy = pharmacy,
                     Status = ReservationStatus.Confirmed,
                     Notes = request.Notes?.Trim(),
-                    ReservedUntilUtc = DateTime.UtcNow.AddHours(request.ReserveForHours),
-                    ConfirmedAtUtc = DateTime.UtcNow,
+                    ReservedUntilUtc = now.AddHours(_reservationPolicy.ReservationLifetimeHours),
+                    PickupAvailableFromUtc = pickupAvailableFromUtc ?? now,
+                    ConfirmedAtUtc = now,
                     TelegramChatId = customer.TelegramChatId
                 };
 
                 affectedStocks = new List<StockItem>();
 
-                foreach (var item in request.Items)
+                foreach (var item in requestedItems)
                 {
                     var requestedQuantity = item.Quantity;
                     var medicineStock = stockByMedicine[item.MedicineId];
@@ -474,6 +518,7 @@ public class ReservationsController(
                     PhoneNumber = customer.PhoneNumber,
                     CreatedAtUtc = reservation.CreatedAtUtc,
                     ReservedUntilUtc = reservation.ReservedUntilUtc,
+                    PickupAvailableFromUtc = reservation.PickupAvailableFromUtc,
                     ConfirmedAtUtc = reservation.ConfirmedAtUtc,
                     ReadyForPickupAtUtc = reservation.ReadyForPickupAtUtc,
                     CompletedAtUtc = reservation.CompletedAtUtc,
@@ -635,6 +680,7 @@ public class ReservationsController(
                 PhoneNumber = x.Customer.PhoneNumber,
                 CreatedAtUtc = x.CreatedAtUtc,
                 ReservedUntilUtc = x.ReservedUntilUtc,
+                PickupAvailableFromUtc = x.PickupAvailableFromUtc,
                 ConfirmedAtUtc = x.ConfirmedAtUtc,
                 ReadyForPickupAtUtc = x.ReadyForPickupAtUtc,
                 CompletedAtUtc = x.CompletedAtUtc,

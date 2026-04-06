@@ -88,9 +88,14 @@ Workflow rules:
 - customer can cancel own active reservation
 - pharmacist or moderator can confirm, mark ready for pickup, complete or expire reservations
 - `POST /api/reservations` supports optional `Idempotency-Key` header for retry-safe create
+- reservations are held for exactly `2 hours`
+- one user can have at most `3` active reservations at the same time
+- reservations can be created while the pharmacy is closed, but pickup is only available from the next opening time
+- reservation responses expose `PickupAvailableFromUtc` so clients can show the earliest pickup moment
 - invalid lifecycle transitions now return `422 Unprocessable Entity` with problem details payload
 - background worker expires overdue reservations automatically
 - notification core writes delivery logs and sends in-app reservation events based on user preferences
+- expiring-soon reminders are sent at `45`, `30` and `15` minutes before the reservation hold ends
 - authenticated users can query paged notification history, unread preview, and update read/unread state individually or in bulk
 - stock is released on `Cancelled` and `Expired`
 - stock is deducted on `Completed`

@@ -10,6 +10,7 @@ using PharmaGo.Api.Hubs;
 using PharmaGo.Api.OpenApi;
 using PharmaGo.Api.Realtime;
 using PharmaGo.Api.RateLimiting;
+using PharmaGo.Api.Reservations;
 using PharmaGo.Api.Services;
 using PharmaGo.Application.Abstractions;
 using PharmaGo.Infrastructure;
@@ -23,6 +24,8 @@ builder.Services.AddProblemDetails();
 builder.Services.AddControllers();
 builder.Services.Configure<RateLimitingSettings>(
     builder.Configuration.GetSection(RateLimitingSettings.SectionName));
+builder.Services.Configure<ReservationPolicySettings>(
+    builder.Configuration.GetSection(ReservationPolicySettings.SectionName));
 builder.Services.AddApiVersioning(options =>
 {
     options.DefaultApiVersion = new ApiVersion(1, 0);

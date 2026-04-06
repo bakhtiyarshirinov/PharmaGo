@@ -14,6 +14,7 @@ public class Reservation : BaseEntity
     public ReservationStatus Status { get; set; } = ReservationStatus.Pending;
     public string? Notes { get; set; }
     public DateTime ReservedUntilUtc { get; set; }
+    public DateTime? PickupAvailableFromUtc { get; set; }
     public DateTime? ConfirmedAtUtc { get; set; }
     public DateTime? ReadyForPickupAtUtc { get; set; }
     public DateTime? CompletedAtUtc { get; set; }

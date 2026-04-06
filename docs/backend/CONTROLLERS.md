@@ -263,9 +263,40 @@ Endpoints:
   - backward-compatible generic transition endpoint
   - customer can cancel own active reservation
   - staff can move reservation through pharmacy workflow
+
+Important details:
+- common controller-level validation, auth, forbidden and not-found failures now return problem-details payloads with stable `code` extensions
+- validates requested quantities and enforces the fixed 2-hour reservation lifetime
+- returns problem-details payloads for idempotency conflicts, stock conflicts and invalid lifecycle transitions
+- groups duplicate request lines by medicine before checking stock and creating reservation items
+- reserves from the earliest-expiring stock first
+- wraps reservation writes in database transactions and detects concurrent stock changes
+- persists reservation create idempotency keys per user to prevent duplicate bookings on retry
+- active reservations exclude already elapsed holds even if background expiration has not run yet
+- limits each user to at most `3` active reservations in `Pending`, `Confirmed` or `ReadyForPickup`
+- allows reservation creation while the pharmacy is closed and exposes `PickupAvailableFromUtc` as the next pickup moment
+- timeline is built from reservation audit events and exposes actor, description and resolved status
+- sends SignalR events on create and status changes
+- publishes low-stock notifications when reservations reduce availability
+- writes audit records for create and status transitions
+- uses explicit audit actions such as `reservation.cancelled`, `reservation.completed` and `reservation.expired`
+- delegates stock release and completion rules to `IReservationStateService`
+- delegates transition permissions and allowed state changes to `IReservationTransitionPolicy`
+- creates in-app notification delivery logs for reservation lifecycle events and expiring-soon reminders
+- uses per-reminder delivery keys so `45/30/15` minute expiring reminders are deduplicated safely across worker polls
+- exposes a UI-facing notification inbox surface with paging, unread preview, filters and bulk read/unread operations
+- dashboard and medicine-search caches are invalidated on reservation writes and automatic expiration
+
+## NotificationsController
+File: `backend/PharmaGo.Api/Controllers/NotificationsController.cs`
+
+Purpose:
+- exposes the authenticated notification inbox and preference-management surface
+
+Endpoints:
 - `GET /api/notifications/preferences`
   - authenticated
-  - returns effective notification settings for in-app and future Telegram delivery
+  - returns effective notification settings for in-app and future delivery channels
 - `PUT /api/notifications/preferences`
   - authenticated
   - updates notification delivery preferences for reservation lifecycle events
@@ -293,23 +324,10 @@ Endpoints:
   - marks a selected set of notifications as read or unread and returns update summary
 
 Important details:
-- common controller-level validation, auth, forbidden and not-found failures now return problem-details payloads with stable `code` extensions
-- validates requested quantities and reservation lifetime
-- returns problem-details payloads for idempotency conflicts, stock conflicts and invalid lifecycle transitions
-- reserves from the earliest-expiring stock first
-- wraps reservation writes in database transactions and detects concurrent stock changes
-- persists reservation create idempotency keys per user to prevent duplicate bookings on retry
-- active reservations exclude already elapsed holds even if background expiration has not run yet
-- timeline is built from reservation audit events and exposes actor, description and resolved status
-- sends SignalR events on create and status changes
-- publishes low-stock notifications when reservations reduce availability
-- writes audit records for create and status transitions
-- uses explicit audit actions such as `reservation.cancelled`, `reservation.completed` and `reservation.expired`
-- delegates stock release and completion rules to `IReservationStateService`
-- delegates transition permissions and allowed state changes to `IReservationTransitionPolicy`
-- creates in-app notification delivery logs for reservation lifecycle events and expiring-soon reminders
-- exposes a UI-facing notification inbox surface with paging, unread preview, filters and bulk read/unread operations
-- dashboard and medicine-search caches are invalidated on reservation writes and automatic expiration
+- inbox history is backed by persisted notification delivery logs
+- unread summary includes preview items for header badges and dropdown surfaces
+- read and unread mutations are available for both single-item and bulk UI actions
+- reservation reminders are deduplicated by a stable delivery key per reminder stage
 
 ## StocksController
 File: `backend/PharmaGo.Api/Controllers/StocksController.cs`

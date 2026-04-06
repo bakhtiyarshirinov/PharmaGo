@@ -14,6 +14,7 @@ public class ReservationResponse
     public string PhoneNumber { get; init; } = string.Empty;
     public DateTime CreatedAtUtc { get; init; }
     public DateTime ReservedUntilUtc { get; init; }
+    public DateTime? PickupAvailableFromUtc { get; init; }
     public DateTime? ConfirmedAtUtc { get; init; }
     public DateTime? ReadyForPickupAtUtc { get; init; }
     public DateTime? CompletedAtUtc { get; init; }

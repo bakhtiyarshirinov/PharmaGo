@@ -13,6 +13,7 @@ public class NotificationDeliveryLog : BaseEntity
 
     public Guid? ReservationId { get; set; }
     public Reservation? Reservation { get; set; }
+    public string? DeliveryKey { get; set; }
 
     public string Title { get; set; } = string.Empty;
     public string Message { get; set; } = string.Empty;

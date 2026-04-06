@@ -33,9 +33,12 @@ This file documents the purpose of every backend source file currently in the re
 
 ### Background
 - `backend/PharmaGo.Api/Background/ReservationExpirationSettings.cs`: options class for reservation expiration worker polling interval.
-- `backend/PharmaGo.Api/Background/ReservationExpirationWorker.cs`: hosted service that expires overdue reservations, releases stock, bumps caches, writes audit logs and publishes realtime events.
-- `backend/PharmaGo.Api/Background/ReservationNotificationSettings.cs`: options for notification reminder polling and expiring-soon lead time.
+- `backend/PharmaGo.Api/Background/ReservationExpirationWorker.cs`: hosted service that expires overdue reservations, releases stock, bumps caches, writes audit logs and publishes realtime events while preserving pickup timing in emitted payloads.
+- `backend/PharmaGo.Api/Background/ReservationNotificationSettings.cs`: options for notification reminder polling and multi-stage expiring-soon reminder offsets.
 - `backend/PharmaGo.Api/Background/ReservationNotificationWorker.cs`: hosted service that dispatches reservation expiring-soon reminders.
+
+### Reservation Policy
+- `backend/PharmaGo.Api/Reservations/ReservationPolicySettings.cs`: configurable reservation business rules for fixed hold duration and per-user active reservation limits.
 
 ### Realtime
 - `backend/PharmaGo.Api/Hubs/NotificationHub.cs`: authenticated SignalR hub that groups connections by user, role and pharmacy.
@@ -70,6 +73,7 @@ This file documents the purpose of every backend source file currently in the re
 - `backend/PharmaGo.Application/Abstractions/INotificationPreferenceService.cs`: contract for loading and updating user notification preferences.
 - `backend/PharmaGo.Application/Abstractions/IReservationNotificationService.cs`: contract for dispatching reservation lifecycle notifications and expiring-soon reminders.
 - `backend/PharmaGo.Application/Abstractions/IReservationStateService.cs`: contract for releasing and completing reserved stock safely.
+- `backend/PharmaGo.Application/Abstractions/IReservationTransitionPolicy.cs`: contract for validating allowed reservation transitions and role-based lifecycle permissions.
 
 ### Auth Contracts
 - `backend/PharmaGo.Application/Auth/Contracts/AuthResponse.cs`: login and registration response with token, expiry and user profile.
@@ -159,11 +163,14 @@ This file documents the purpose of every backend source file currently in the re
 - `backend/PharmaGo.Domain/Models/AuditLog.cs`: immutable audit record for sensitive actions and system events.
 - `backend/PharmaGo.Domain/Models/Medicine.cs`: medicine catalog entity with brand, generic, manufacturer and stock relations.
 - `backend/PharmaGo.Domain/Models/MedicineCategory.cs`: medicine category or therapeutic group entity.
+- `backend/PharmaGo.Domain/Models/NotificationDeliveryLog.cs`: persisted inbox/delivery log row with per-event status, read state and reminder deduplication key.
+- `backend/PharmaGo.Domain/Models/NotificationPreference.cs`: per-user notification preference row for reservation lifecycle delivery toggles.
 - `backend/PharmaGo.Domain/Models/PharmacyChain.cs`: pharmacy network root entity for grouping branches.
 - `backend/PharmaGo.Domain/Models/Pharmacy.cs`: pharmacy branch entity with contact and location data.
 - `backend/PharmaGo.Domain/Models/RefreshToken.cs`: persisted refresh token record with revocation and rotation metadata.
 - `backend/PharmaGo.Domain/Models/Depot.cs`: wholesale depot or warehouse entity used for upstream supply.
-- `backend/PharmaGo.Domain/Models/Reservation.cs`: reservation aggregate root with status, customer, pharmacy and reserved-until timestamp.
+- `backend/PharmaGo.Domain/Models/Reservation.cs`: reservation aggregate root with status, customer, pharmacy, reserved-until timestamp and earliest pickup moment.
+- `backend/PharmaGo.Domain/Models/ReservationIdempotencyRecord.cs`: persisted idempotency record for retry-safe reservation creation per user.
 - `backend/PharmaGo.Domain/Models/ReservationItem.cs`: line item inside a reservation referencing medicine and quantity.
 - `backend/PharmaGo.Domain/Models/SupplierMedicine.cs`: relation between depot and medicine including wholesale conditions.
 - `backend/PharmaGo.Domain/Models/StockItem.cs`: per-batch stock record with availability, pricing, reorder logic and optimistic concurrency token.
@@ -208,10 +215,13 @@ This file documents the purpose of every backend source file currently in the re
 - `backend/PharmaGo.Infrastructure/Persistence/Configurations/DepotConfiguration.cs`: EF mapping for depots.
 - `backend/PharmaGo.Infrastructure/Persistence/Configurations/MedicineCategoryConfiguration.cs`: EF mapping for medicine categories.
 - `backend/PharmaGo.Infrastructure/Persistence/Configurations/MedicineConfiguration.cs`: EF mapping for medicines and their constraints.
+- `backend/PharmaGo.Infrastructure/Persistence/Configurations/NotificationDeliveryLogConfiguration.cs`: EF mapping for notification delivery logs, read-state indexes and reminder deduplication keys.
+- `backend/PharmaGo.Infrastructure/Persistence/Configurations/NotificationPreferenceConfiguration.cs`: EF mapping for per-user notification preferences.
 - `backend/PharmaGo.Infrastructure/Persistence/Configurations/PharmacyChainConfiguration.cs`: EF mapping for pharmacy chains.
 - `backend/PharmaGo.Infrastructure/Persistence/Configurations/PharmacyConfiguration.cs`: EF mapping for pharmacies and chain relation.
 - `backend/PharmaGo.Infrastructure/Persistence/Configurations/RefreshTokenConfiguration.cs`: EF mapping for stored refresh tokens and lookup indexes.
 - `backend/PharmaGo.Infrastructure/Persistence/Configurations/ReservationConfiguration.cs`: EF mapping for reservation header table and indexes.
+- `backend/PharmaGo.Infrastructure/Persistence/Configurations/ReservationIdempotencyRecordConfiguration.cs`: EF mapping for per-user reservation idempotency keys and response snapshots.
 - `backend/PharmaGo.Infrastructure/Persistence/Configurations/ReservationItemConfiguration.cs`: EF mapping for reservation line items.
 - `backend/PharmaGo.Infrastructure/Persistence/Configurations/StockItemConfiguration.cs`: EF mapping for inventory batches and uniqueness constraints.
 - `backend/PharmaGo.Infrastructure/Persistence/Configurations/SupplierMedicineConfiguration.cs`: EF mapping for depot-medicine supply rows.
@@ -239,6 +249,14 @@ This file documents the purpose of every backend source file currently in the re
 - `backend/PharmaGo.Infrastructure/Persistence/Migrations/20260405185242_AddUserMedicineFavoritesAndViews.Designer.cs`: EF-generated metadata for the consumer medicine personalization migration.
 - `backend/PharmaGo.Infrastructure/Persistence/Migrations/20260405185924_AddUserPharmacyFavoritesAndViews.cs`: schema update adding user favorite pharmacies and recent pharmacy view tracking tables.
 - `backend/PharmaGo.Infrastructure/Persistence/Migrations/20260405185924_AddUserPharmacyFavoritesAndViews.Designer.cs`: EF-generated metadata for the consumer pharmacy personalization migration.
+- `backend/PharmaGo.Infrastructure/Persistence/Migrations/20260405215755_AddReservationIdempotency.cs`: schema update adding reservation idempotency storage for retry-safe create requests.
+- `backend/PharmaGo.Infrastructure/Persistence/Migrations/20260405215755_AddReservationIdempotency.Designer.cs`: EF-generated metadata for the reservation idempotency migration.
+- `backend/PharmaGo.Infrastructure/Persistence/Migrations/20260405221257_AddNotificationCore.cs`: schema update adding notification preferences and delivery logging tables.
+- `backend/PharmaGo.Infrastructure/Persistence/Migrations/20260405221257_AddNotificationCore.Designer.cs`: EF-generated metadata for the notifications core migration.
+- `backend/PharmaGo.Infrastructure/Persistence/Migrations/20260405225434_AddNotificationInboxReadState.cs`: schema update adding inbox read-state and summary-friendly indexes for notification delivery logs.
+- `backend/PharmaGo.Infrastructure/Persistence/Migrations/20260405225434_AddNotificationInboxReadState.Designer.cs`: EF-generated metadata for the notification inbox migration.
+- `backend/PharmaGo.Infrastructure/Persistence/Migrations/20260406073619_AddReservationPolicyFields.cs`: schema update adding pickup-availability timing and reminder delivery deduplication keys for reservation policy hardening.
+- `backend/PharmaGo.Infrastructure/Persistence/Migrations/20260406073619_AddReservationPolicyFields.Designer.cs`: EF-generated metadata for the reservation policy hardening migration.
 - `backend/PharmaGo.Infrastructure/Persistence/Migrations/ApplicationDbContextModelSnapshot.cs`: latest EF model snapshot used for future migration diffs.
 
 ### Services
@@ -247,12 +265,15 @@ This file documents the purpose of every backend source file currently in the re
 - `backend/PharmaGo.Infrastructure/Services/MedicineCatalogService.cs`: builds public medicine-card, substitution and similar-medicine read models with cached availability summaries.
 - `backend/PharmaGo.Infrastructure/Services/MedicineConsumerService.cs`: builds consumer popular/favorite/recent feeds and records favorite/recent interactions.
 - `backend/PharmaGo.Infrastructure/Services/MedicineSearchService.cs`: executes consumer-facing medicine search with geo filters, ranking and capped nested availabilities.
+- `backend/PharmaGo.Infrastructure/Services/NotificationInboxService.cs`: serves paged notification history, unread summary and bulk read-state updates for inbox UIs.
+- `backend/PharmaGo.Infrastructure/Services/NotificationPreferenceService.cs`: loads and updates per-user notification delivery preferences.
 - `backend/PharmaGo.Infrastructure/Services/PharmacyCatalogService.cs`: builds pharmacy-card and pharmacy-centric medicine catalog read models.
 - `backend/PharmaGo.Infrastructure/Services/PharmacyConsumerService.cs`: builds consumer popular/favorite/recent pharmacy feeds and records favorite/recent interactions.
 - `backend/PharmaGo.Infrastructure/Services/PharmacyDiscoveryService.cs`: searches nearby pharmacies with geo, opening-hours and availability summary calculations.
-- `backend/PharmaGo.Infrastructure/Services/PharmacyDiscoverySupport.cs`: shared helpers for distance calculation and opening-hours evaluation.
+- `backend/PharmaGo.Infrastructure/Services/PharmacyDiscoverySupport.cs`: shared helpers for distance calculation, opening-hours evaluation and next pickup-available time resolution.
 - `backend/PharmaGo.Infrastructure/Services/RefreshTokenService.cs`: generates, hashes, rotates and revokes refresh tokens.
 - `backend/PharmaGo.Infrastructure/Services/ReservationStateService.cs`: encapsulates stock release and stock deduction rules for reservation state changes and fails fast on inconsistent reserved quantities.
+- `backend/PharmaGo.Infrastructure/Services/ReservationTransitionPolicy.cs`: central policy for reservation state transitions and actor permission checks.
 
 ## PharmaGo.IntegrationTests
 
@@ -266,12 +287,17 @@ This file documents the purpose of every backend source file currently in the re
 
 ### Test Suites
 - `backend/PharmaGo.IntegrationTests/Auth/AuthFlowTests.cs`: covers register, refresh rotation, logout and revoke-all flows.
+- `backend/PharmaGo.IntegrationTests/Auth/ApiVersioningAndAccessTests.cs`: covers versioned routes, backward-compatible aliases and authorization boundaries.
+- `backend/PharmaGo.IntegrationTests/Auth/RateLimitingTests.cs`: covers fixed-window throttling and `429` problem-details responses on protected routes.
 - `backend/PharmaGo.IntegrationTests/Medicines/MedicineAvailabilityTests.cs`: covers consumer-facing medicine availability lookup and reservable-only filtering.
 - `backend/PharmaGo.IntegrationTests/Medicines/MedicineCatalogTests.cs`: covers medicine-card lookup with live summary data.
 - `backend/PharmaGo.IntegrationTests/Medicines/ConsumerMedicineFlowTests.cs`: covers consumer popular feed, favorites and recent-view tracking.
 - `backend/PharmaGo.IntegrationTests/Medicines/MedicineRecommendationTests.cs`: covers substitution and similar-medicine recommendation endpoints.
 - `backend/PharmaGo.IntegrationTests/Medicines/MedicineSearchTests.cs`: covers geo-aware medicine search, reservable-only filtering and invalid coordinate input handling.
 - `backend/PharmaGo.IntegrationTests/Medicines/MedicineSuggestionsTests.cs`: covers lightweight medicine autocomplete endpoints.
+- `backend/PharmaGo.IntegrationTests/Notifications/NotificationInboxTests.cs`: covers paged inbox history, unread summary and bulk read/unread mutations.
+- `backend/PharmaGo.IntegrationTests/Notifications/NotificationPreferencesTests.cs`: covers loading and updating per-user notification preferences.
+- `backend/PharmaGo.IntegrationTests/Notifications/ReservationNotificationsTests.cs`: covers reservation lifecycle notifications and staged expiring-soon reminder delivery.
 - `backend/PharmaGo.IntegrationTests/Pharmacies/PharmacyCatalogTests.cs`: covers pharmacy-card lookup and pharmacy-centric medicine catalog browsing.
 - `backend/PharmaGo.IntegrationTests/Pharmacies/ConsumerPharmacyFlowTests.cs`: covers consumer popular pharmacies feed, favorites and recent-view tracking.
 - `backend/PharmaGo.IntegrationTests/Pharmacies/PharmacyDiscoveryTests.cs`: covers nearby-pharmacy discovery, open-now filtering and invalid geo input handling.

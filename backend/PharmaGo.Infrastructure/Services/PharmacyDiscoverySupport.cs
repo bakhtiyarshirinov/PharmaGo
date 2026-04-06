@@ -3,7 +3,7 @@ using System.Text.Json;
 
 namespace PharmaGo.Infrastructure.Services;
 
-internal static class PharmacyDiscoverySupport
+public static class PharmacyDiscoverySupport
 {
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
 
@@ -97,6 +97,79 @@ internal static class PharmacyDiscoverySupport
         }
 
         return false;
+    }
+
+    public static DateTime? GetPickupAvailableFromUtc(bool isOpen24Hours, string? openingHoursJson, DateTime utcNow)
+    {
+        if (isOpen24Hours)
+        {
+            return utcNow;
+        }
+
+        if (string.IsNullOrWhiteSpace(openingHoursJson))
+        {
+            return null;
+        }
+
+        try
+        {
+            var schedule = JsonSerializer.Deserialize<OpeningHoursDocument>(openingHoursJson, JsonOptions);
+            if (schedule?.Weekly is null || schedule.Weekly.Count == 0)
+            {
+                return null;
+            }
+
+            if (IsOpenNow(isOpen24Hours, openingHoursJson, utcNow))
+            {
+                return utcNow;
+            }
+
+            var timeZone = ResolveTimeZone(schedule.TimeZone);
+            var localNow = TimeZoneInfo.ConvertTimeFromUtc(utcNow, timeZone);
+
+            var entries = schedule.Weekly
+                .Select(entry => new
+                {
+                    Day = NormalizeDay(entry.Day),
+                    Open = TryParseTime(entry.Open, out var openTime) ? openTime : (TimeOnly?)null
+                })
+                .Where(x => x.Open.HasValue && !string.IsNullOrWhiteSpace(x.Day))
+                .ToList();
+
+            for (var dayOffset = 0; dayOffset <= 7; dayOffset++)
+            {
+                var targetDate = localNow.Date.AddDays(dayOffset);
+                var targetDay = NormalizeDay(targetDate.DayOfWeek);
+                var nextEntry = entries
+                    .Where(x => x.Day == targetDay)
+                    .OrderBy(x => x.Open)
+                    .FirstOrDefault(x => dayOffset > 0 || x.Open!.Value > TimeOnly.FromDateTime(localNow));
+
+                if (nextEntry is null)
+                {
+                    continue;
+                }
+
+                var localPickup = targetDate + nextEntry.Open!.Value.ToTimeSpan();
+                return TimeZoneInfo.ConvertTimeToUtc(
+                    DateTime.SpecifyKind(localPickup, DateTimeKind.Unspecified),
+                    timeZone);
+            }
+        }
+        catch (JsonException)
+        {
+            return null;
+        }
+        catch (TimeZoneNotFoundException)
+        {
+            return null;
+        }
+        catch (InvalidTimeZoneException)
+        {
+            return null;
+        }
+
+        return null;
     }
 
     private static bool TryParseTime(string? value, out TimeOnly time)

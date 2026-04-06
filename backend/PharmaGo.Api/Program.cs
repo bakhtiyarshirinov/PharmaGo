@@ -2,11 +2,13 @@ using Asp.Versioning;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Diagnostics.HealthChecks;
 using Microsoft.OpenApi.Models;
 using PharmaGo.Api.Auth;
 using PharmaGo.Api.Background;
 using PharmaGo.Api.Controllers;
 using PharmaGo.Api.Hubs;
+using PharmaGo.Api.Observability;
 using PharmaGo.Api.OpenApi;
 using PharmaGo.Api.Realtime;
 using PharmaGo.Api.RateLimiting;
@@ -22,6 +24,8 @@ const string FrontendCorsPolicy = "FrontendDev";
 builder.Services.AddInfrastructure(builder.Configuration);
 builder.Services.AddProblemDetails();
 builder.Services.AddControllers();
+builder.Services.AddSingleton<BackgroundWorkerExecutionMonitor>();
+builder.Services.AddSingleton<PharmaGoMetrics>();
 builder.Services.Configure<RateLimitingSettings>(
     builder.Configuration.GetSection(RateLimitingSettings.SectionName));
 builder.Services.Configure<ReservationPolicySettings>(
@@ -66,7 +70,9 @@ builder.Services.Configure<ReservationNotificationSettings>(
 builder.Services.AddHostedService<ReservationExpirationWorker>();
 builder.Services.AddHostedService<ReservationNotificationWorker>();
 builder.Services.AddHealthChecks()
-    .AddDbContextCheck<ApplicationDbContext>();
+    .AddCheck("self", () => HealthCheckResult.Healthy("Host is running."), tags: ["live"])
+    .AddDbContextCheck<ApplicationDbContext>("database", tags: ["ready"])
+    .AddCheck<BackgroundWorkersHealthCheck>("background_workers", tags: ["ready"]);
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddCors(options =>
 {
@@ -141,7 +147,21 @@ app.UseCors(FrontendCorsPolicy);
 app.UseAuthorization();
 app.MapControllers();
 app.MapHub<NotificationHub>("/hubs/notifications");
-app.MapHealthChecks("/health", new HealthCheckOptions());
+app.MapHealthChecks("/health/live", new HealthCheckOptions
+{
+    Predicate = check => check.Tags.Contains("live"),
+    ResponseWriter = HealthCheckResponseWriter.WriteJsonAsync
+});
+app.MapHealthChecks("/health/ready", new HealthCheckOptions
+{
+    Predicate = check => check.Tags.Contains("ready"),
+    ResponseWriter = HealthCheckResponseWriter.WriteJsonAsync
+});
+app.MapHealthChecks("/health", new HealthCheckOptions
+{
+    Predicate = check => check.Tags.Contains("ready"),
+    ResponseWriter = HealthCheckResponseWriter.WriteJsonAsync
+});
 
 app.Run();
 

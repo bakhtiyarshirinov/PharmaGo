@@ -24,15 +24,17 @@ The backend solves four main business flows:
 - PostgreSQL persistence through EF Core
 - Redis-ready distributed caching with in-memory fallback
 - automatic migrations on startup
-- seed data for pharmacies, medicines and staff accounts
+- optional demo seed data for pharmacies, medicines and staff accounts
 - Swagger UI in development
 - SignalR hub for realtime reservation and stock events
 - background worker for auto-expiring reservations
 - background worker for reservation expiring-soon reminders
 - audit log storage for sensitive business actions
 - optimistic concurrency protection on reservation and stock write paths
-- health endpoint at `/health`
+- health endpoints at `/health`, `/health/live` and `/health/ready`
 - Docker Compose stack for `api + postgres + redis`
+- moderator-only master-data admin for catalog, chains, depots and supplier offers
+- minimal observability counters and worker health tracking for reservations and notifications
 
 ## Default Seed Accounts
 - `Pharmacist`: `+994500000001` / `Pharmacist123!`
@@ -48,6 +50,7 @@ The backend solves four main business flows:
 - `PharmaciesController`: nearby pharmacy discovery, map pins, autocomplete, popular feed, pharmacy cards and pharmacy catalog browsing
 - `MePharmaciesController`: authenticated consumer pharmacy feeds for favorites and recent views
 - `AdminPharmaciesController`: moderator-only pharmacy CRUD, schedule management and soft delete/restore
+- `AdminMasterDataController`: moderator-only category, medicine, chain, depot and supplier-offer admin
 - `ReservationsController`: create reservation, active/timeline lookup and explicit lifecycle commands
 - `NotificationsController`: authenticated notification preferences, paged inbox history, unread preview and read-status actions for consumer delivery settings
 - `StocksController`: pharmacy stock CRUD, explicit inventory commands and operational stock alerts
@@ -89,6 +92,7 @@ Workflow rules:
 - customer can cancel own active reservation
 - newly created reservations start in `Pending`
 - pharmacist or moderator can confirm, mark ready for pickup, complete or expire reservations
+- pharmacist cannot create reservations on behalf of customers
 - `POST /api/reservations` supports optional `Idempotency-Key` header for retry-safe create
 - reservations are held for exactly `2 hours`
 - one user can have at most `3` active reservations at the same time
@@ -105,21 +109,26 @@ Workflow rules:
 - reservation responses now expose lifecycle timestamps for create, confirm, ready, complete, cancel and expire moments
 
 ## Operational Notes
-- API startup runs migrations and seed logic automatically
+- API startup runs migrations automatically
+- demo seed data runs only when `DatabaseSeeding:EnableDemoData=true` and production seeding is explicitly allowed or the host is not `Production`
 - Swagger UI is enabled in development environment
-- database health is included in `/health`
+- `/health/live` covers process liveness and `/health/ready` covers database plus background-worker readiness
 - global exception handling is enabled through ASP.NET Core `ProblemDetails`
 - controller validation, auth and not-found errors now converge on a unified problem-details contract with stable `code` values
 - auth, search/suggestions and reservation-create endpoints are protected by fixed-window rate limits and return `429` problem-details payloads when throttled
 - hot read endpoints use distributed cache versioning for safe invalidation
 - if `Redis:ConnectionString` is empty, the app falls back to in-memory distributed cache
 - moderators can manage pharmacy profiles and opening-hours schedules through dedicated admin endpoints
+- moderators can manage medicine categories, medicines, pharmacy chains, depots and supplier offers through master-data admin endpoints
 - inventory staff flows support explicit `adjust`, `receive` and `writeoff` commands in addition to the generic stock update endpoint
 - stock alerts cover `low-stock`, `restock-suggestions`, `out-of-stock` and `expiring`
 - expired batches are rejected on stock create/update and ignored by low-stock and restock-suggestion alerts
+- reservation, notification and background-worker flows now emit structured logs and `System.Diagnostics.Metrics` counters for basic operational visibility
 
 Read these next:
 
 - `docs/backend/CONTROLLERS.md`
 - `docs/backend/FILE_REFERENCE.md`
 - `docs/backend/AUTHORIZATION_MATRIX.md`
+- `docs/backend/RUNBOOK.md`
+- `docs/backend/RELEASE_CHECKLIST.md`

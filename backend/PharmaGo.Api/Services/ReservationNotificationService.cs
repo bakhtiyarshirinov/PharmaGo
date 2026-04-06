@@ -2,6 +2,7 @@ using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 using PharmaGo.Api.Background;
+using PharmaGo.Api.Observability;
 using PharmaGo.Api.Realtime;
 using PharmaGo.Application.Abstractions;
 using PharmaGo.Application.Notifications.Contracts;
@@ -14,7 +15,9 @@ namespace PharmaGo.Api.Services;
 public class ReservationNotificationService(
     ApplicationDbContext context,
     RealtimeNotificationService realtimeNotificationService,
-    IOptions<ReservationNotificationSettings> settings) : IReservationNotificationService
+    IOptions<ReservationNotificationSettings> settings,
+    PharmaGoMetrics metrics,
+    ILogger<ReservationNotificationService> logger) : IReservationNotificationService
 {
     private readonly ReservationNotificationSettings _settings = settings.Value;
 
@@ -173,6 +176,11 @@ public class ReservationNotificationService(
         if (!inAppAllowed)
         {
             await WriteLogAsync(userId, reservationId, eventType, NotificationChannel.InApp, NotificationDeliveryStatus.Skipped, title, message, payload, deliveryKey, null, cancellationToken);
+            metrics.RecordNotificationDispatch(eventType, NotificationChannel.InApp, NotificationDeliveryStatus.Skipped);
+            logger.LogInformation(
+                "Skipped notification {EventType} for user {UserId} because preferences disabled the event.",
+                eventType,
+                userId);
             return;
         }
 
@@ -191,10 +199,23 @@ public class ReservationNotificationService(
 
             await realtimeNotificationService.NotifyUserNotificationAsync(userId, notificationPayload, cancellationToken);
             await WriteLogAsync(userId, reservationId, eventType, NotificationChannel.InApp, NotificationDeliveryStatus.Sent, title, message, payload, deliveryKey, null, cancellationToken);
+            metrics.RecordNotificationDispatch(eventType, NotificationChannel.InApp, NotificationDeliveryStatus.Sent);
+            logger.LogInformation(
+                "Dispatched notification {EventType} for user {UserId} and reservation {ReservationId}.",
+                eventType,
+                userId,
+                reservationId);
         }
         catch (Exception exception)
         {
             await WriteLogAsync(userId, reservationId, eventType, NotificationChannel.InApp, NotificationDeliveryStatus.Failed, title, message, payload, deliveryKey, exception.Message, cancellationToken);
+            metrics.RecordNotificationDispatch(eventType, NotificationChannel.InApp, NotificationDeliveryStatus.Failed);
+            logger.LogError(
+                exception,
+                "Failed to dispatch notification {EventType} for user {UserId} and reservation {ReservationId}.",
+                eventType,
+                userId,
+                reservationId);
         }
     }
 

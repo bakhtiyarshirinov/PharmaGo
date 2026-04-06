@@ -3,8 +3,12 @@ using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
 using PharmaGo.Application.Auth.Contracts;
+using PharmaGo.Application.Reservations.Commands.CreateReservation;
 using PharmaGo.IntegrationTests.Infrastructure;
+using PharmaGo.Infrastructure.Persistence;
 
 namespace PharmaGo.IntegrationTests.Auth;
 
@@ -85,6 +89,44 @@ public class ApiVersioningAndAccessTests(CustomWebApplicationFactory factory) : 
         Assert.Equal(HttpStatusCode.OK, inventoryResponse.StatusCode);
 
         await AssertForbiddenAsync("/api/v1/users");
+    }
+
+    [Fact]
+    public async Task Pharmacist_ShouldNotCreateReservations()
+    {
+        using var scope = factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+        var pharmacy = await db.Pharmacies.FirstAsync(x => x.Name == "PharmaGo Central");
+        var stockItem = await db.StockItems.FirstAsync(x => x.PharmacyId == pharmacy.Id && x.Quantity >= 1);
+
+        var loginResponse = await _client.PostAsJsonAsync("/api/v1/auth/login", new LoginRequest
+        {
+            PhoneNumber = "+994500000001",
+            Password = "Pharmacist123!"
+        });
+
+        var auth = await loginResponse.Content.ReadAsAsync<AuthResponse>();
+        Assert.NotNull(auth);
+        _client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", auth!.AccessToken);
+
+        var response = await _client.PostAsJsonAsync("/api/v1/reservations", new CreateReservationRequest
+        {
+            PharmacyId = pharmacy.Id,
+            ReserveForHours = 2,
+            Items =
+            [
+                new CreateReservationItemRequest
+                {
+                    MedicineId = stockItem.MedicineId,
+                    Quantity = 1
+                }
+            ]
+        });
+
+        Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+        var problem = await response.Content.ReadAsAsync<ProblemDetails>();
+        Assert.NotNull(problem);
+        Assert.Equal(StatusCodes.Status403Forbidden, problem!.Status);
     }
 
     [Fact]

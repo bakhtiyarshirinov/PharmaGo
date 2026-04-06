@@ -24,6 +24,7 @@ This file documents the purpose of every backend source file currently in the re
 - `backend/PharmaGo.Api/Controllers/MeMedicinesController.cs`: authenticated consumer medicine feeds for favorites and recent views.
 - `backend/PharmaGo.Api/Controllers/PharmaciesController.cs`: public nearby-pharmacy discovery, popular-feed and catalog endpoints with geo filters and paging.
 - `backend/PharmaGo.Api/Controllers/AdminPharmaciesController.cs`: moderator-only pharmacy CRUD, schedule management and restore endpoints.
+- `backend/PharmaGo.Api/Controllers/AdminMasterDataController.cs`: moderator-only admin endpoints for categories, medicines, pharmacy chains, depots and supplier offers.
 - `backend/PharmaGo.Api/Controllers/MePharmaciesController.cs`: authenticated consumer pharmacy feeds for favorites and recent views.
 - `backend/PharmaGo.Api/Controllers/UsersController.cs`: moderator-only user management endpoints with soft delete and restore.
 - `backend/PharmaGo.Api/Controllers/ReservationsController.cs`: reservation create, active/timeline lookup and explicit workflow transition endpoints.
@@ -37,6 +38,12 @@ This file documents the purpose of every backend source file currently in the re
 - `backend/PharmaGo.Api/Background/ReservationExpirationWorker.cs`: hosted service that expires overdue reservations, releases stock, bumps caches, writes audit logs and publishes realtime events while preserving pickup timing in emitted payloads.
 - `backend/PharmaGo.Api/Background/ReservationNotificationSettings.cs`: options for notification reminder polling and multi-stage expiring-soon reminder offsets.
 - `backend/PharmaGo.Api/Background/ReservationNotificationWorker.cs`: hosted service that dispatches reservation expiring-soon reminders.
+
+### Observability
+- `backend/PharmaGo.Api/Observability/PharmaGoMetrics.cs`: `System.Diagnostics.Metrics` counters for reservations, notifications and background workers.
+- `backend/PharmaGo.Api/Observability/BackgroundWorkerExecutionMonitor.cs`: singleton tracker for last background-worker success and failure state.
+- `backend/PharmaGo.Api/Observability/BackgroundWorkersHealthCheck.cs`: readiness health check that evaluates background-worker freshness.
+- `backend/PharmaGo.Api/Observability/HealthCheckResponseWriter.cs`: JSON formatter used by liveness and readiness endpoints.
 
 ### Reservation Policy
 - `backend/PharmaGo.Api/Reservations/ReservationPolicySettings.cs`: configurable reservation business rules for fixed hold duration and per-user active reservation limits.
@@ -87,6 +94,23 @@ This file documents the purpose of every backend source file currently in the re
 
 ### Common
 - `backend/PharmaGo.Application/Common/Contracts/PagedResponse.cs`: generic paged response wrapper with totals, pages and sorting metadata.
+
+### Master Data
+- `backend/PharmaGo.Application/MasterData/Contracts/CreateManagedMedicineCategoryRequest.cs`: request contract for creating medicine categories through master-data admin.
+- `backend/PharmaGo.Application/MasterData/Contracts/UpdateManagedMedicineCategoryRequest.cs`: request contract for editing medicine categories through master-data admin.
+- `backend/PharmaGo.Application/MasterData/Contracts/ManagedMedicineCategoryResponse.cs`: moderator-facing medicine category DTO with linked-medicines count.
+- `backend/PharmaGo.Application/MasterData/Contracts/CreateManagedMedicineRequest.cs`: request contract for creating catalog medicines through master-data admin.
+- `backend/PharmaGo.Application/MasterData/Contracts/UpdateManagedMedicineRequest.cs`: request contract for editing catalog medicines through master-data admin.
+- `backend/PharmaGo.Application/MasterData/Contracts/ManagedMedicineResponse.cs`: moderator-facing medicine DTO with category and supply counters.
+- `backend/PharmaGo.Application/MasterData/Contracts/CreateManagedPharmacyChainRequest.cs`: request contract for creating pharmacy chains.
+- `backend/PharmaGo.Application/MasterData/Contracts/UpdateManagedPharmacyChainRequest.cs`: request contract for editing pharmacy chains.
+- `backend/PharmaGo.Application/MasterData/Contracts/ManagedPharmacyChainResponse.cs`: moderator-facing pharmacy-chain DTO with linked-pharmacy count.
+- `backend/PharmaGo.Application/MasterData/Contracts/CreateManagedDepotRequest.cs`: request contract for creating depots.
+- `backend/PharmaGo.Application/MasterData/Contracts/UpdateManagedDepotRequest.cs`: request contract for editing depots.
+- `backend/PharmaGo.Application/MasterData/Contracts/ManagedDepotResponse.cs`: moderator-facing depot DTO with supplier-offer count.
+- `backend/PharmaGo.Application/MasterData/Contracts/CreateManagedSupplierMedicineRequest.cs`: request contract for creating supplier medicine offers.
+- `backend/PharmaGo.Application/MasterData/Contracts/UpdateManagedSupplierMedicineRequest.cs`: request contract for editing supplier medicine offers.
+- `backend/PharmaGo.Application/MasterData/Contracts/ManagedSupplierMedicineResponse.cs`: moderator-facing supplier-offer DTO with depot and medicine labels.
 
 ### Notifications
 - `backend/PharmaGo.Application/Notifications/Contracts/NotificationHistoryItemResponse.cs`: DTO returned by notification inbox history with read state and delivery metadata.
@@ -213,6 +237,7 @@ This file documents the purpose of every backend source file currently in the re
 - `backend/PharmaGo.Infrastructure/Persistence/ApplicationDbContext.cs`: EF Core DbContext implementing `IApplicationDbContext` and timestamp handling.
 - `backend/PharmaGo.Infrastructure/Persistence/ApplicationDbContextSeeder.cs`: startup seed for demo catalog, pharmacies, depot and staff users.
 - `backend/PharmaGo.Infrastructure/Persistence/DatabaseInitializationExtensions.cs`: startup extension that applies migrations and runs the seed.
+- `backend/PharmaGo.Infrastructure/Persistence/DatabaseSeedSettings.cs`: configuration model controlling demo seeding and production seeding safety.
 
 ### Entity Configurations
 - `backend/PharmaGo.Infrastructure/Persistence/Configurations/AppUserConfiguration.cs`: EF mapping for users and role/storage constraints.

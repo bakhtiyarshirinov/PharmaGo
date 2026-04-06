@@ -9,6 +9,7 @@ using System.Text;
 using System.Text.Json;
 using PharmaGo.Api.Realtime;
 using PharmaGo.Api.Reservations;
+using PharmaGo.Api.Observability;
 using PharmaGo.Application.Abstractions;
 using PharmaGo.Application.Reservations.Commands.CreateReservation;
 using PharmaGo.Application.Reservations.Commands.UpdateReservationStatus;
@@ -37,7 +38,9 @@ public class ReservationsController(
     IReservationStateService reservationStateService,
     IReservationTransitionPolicy reservationTransitionPolicy,
     RealtimeNotificationService realtimeNotificationService,
-    IOptions<ReservationPolicySettings> reservationPolicyOptions) : ApiControllerBase
+    IOptions<ReservationPolicySettings> reservationPolicyOptions,
+    PharmaGoMetrics metrics,
+    ILogger<ReservationsController> logger) : ApiControllerBase
 {
     private const string IdempotencyKeyHeaderName = "Idempotency-Key";
     private readonly ReservationPolicySettings _reservationPolicy = reservationPolicyOptions.Value;
@@ -568,6 +571,13 @@ public class ReservationsController(
                 ReservationStatus.Pending,
                 cancellationToken);
             await PublishLowStockNotificationsAsync(affectedStocks ?? [], cancellationToken);
+            metrics.RecordReservationCreated();
+            logger.LogInformation(
+                "Reservation {ReservationId} created for customer {CustomerId} at pharmacy {PharmacyId} with {ItemCount} items.",
+                response.ReservationId,
+                customerId,
+                pharmacyId,
+                response.Items.Count);
 
             return CreatedAtAction(nameof(GetById), new { id = response!.ReservationId }, response);
         }
@@ -888,6 +898,13 @@ public class ReservationsController(
                 Status = response.Status.ToString()
             },
             cancellationToken: cancellationToken);
+        metrics.RecordReservationTransition(previousStatus, response.Status);
+        logger.LogInformation(
+            "Reservation {ReservationId} transitioned from {PreviousStatus} to {CurrentStatus} by user {UserId}.",
+            response.ReservationId,
+            previousStatus,
+            response.Status,
+            currentUserService.UserId);
 
         return Ok(response);
     }

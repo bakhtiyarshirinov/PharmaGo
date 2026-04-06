@@ -15,6 +15,7 @@ public static class RolePermissionProvider
             [
                 PermissionNames.ManageUsers,
                 PermissionNames.ManagePharmacies,
+                PermissionNames.ManageMasterData,
                 PermissionNames.ManageOrders,
                 PermissionNames.ManageInventory,
                 PermissionNames.ViewDashboard,

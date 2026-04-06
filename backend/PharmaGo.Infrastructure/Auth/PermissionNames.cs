@@ -4,6 +4,7 @@ public static class PermissionNames
 {
     public const string ManageUsers = "users.manage";
     public const string ManagePharmacies = "pharmacies.manage";
+    public const string ManageMasterData = "masterdata.manage";
     public const string ManageOrders = "orders.manage";
     public const string ManageInventory = "inventory.manage";
     public const string ViewDashboard = "dashboard.view";

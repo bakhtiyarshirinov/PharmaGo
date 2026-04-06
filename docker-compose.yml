@@ -52,7 +52,12 @@ services:
       Jwt__SecretKey: ${JWT_SECRET_KEY:-PharmaGo.Super.Secret.Jwt.Key.For.Docker.Development.2026}
       Jwt__ExpirationMinutes: ${JWT_EXPIRATION_MINUTES:-60}
       RefreshToken__ExpirationDays: ${REFRESH_EXPIRATION_DAYS:-14}
+      DatabaseSeeding__EnableDemoData: ${ENABLE_DEMO_DATA:-true}
+      DatabaseSeeding__AllowProductionSeeding: ${ALLOW_PRODUCTION_SEEDING:-false}
+      ReservationPolicy__ReservationLifetimeHours: ${RESERVATION_LIFETIME_HOURS:-2}
+      ReservationPolicy__MaxActiveReservationsPerUser: ${MAX_ACTIVE_RESERVATIONS_PER_USER:-3}
       ReservationExpiration__PollingIntervalSeconds: ${RESERVATION_EXPIRATION_POLL_SECONDS:-15}
+      ReservationNotifications__PollingIntervalSeconds: ${RESERVATION_NOTIFICATION_POLL_SECONDS:-300}
     ports:
       - "${API_PORT:-8080}:8080"
 

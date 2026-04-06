@@ -1,5 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Options;
 
 namespace PharmaGo.Infrastructure.Persistence;
 
@@ -9,6 +11,8 @@ public static class DatabaseInitializationExtensions
     {
         using var scope = services.CreateScope();
         var context = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+        var environment = scope.ServiceProvider.GetRequiredService<IHostEnvironment>();
+        var seedSettings = scope.ServiceProvider.GetService<IOptions<DatabaseSeedSettings>>()?.Value ?? new DatabaseSeedSettings();
 
         if (context.Database.IsNpgsql())
         {
@@ -19,6 +23,9 @@ public static class DatabaseInitializationExtensions
             await context.Database.EnsureCreatedAsync(cancellationToken);
         }
 
-        await ApplicationDbContextSeeder.SeedAsync(context, cancellationToken);
+        if (seedSettings.EnableDemoData && (!environment.IsProduction() || seedSettings.AllowProductionSeeding))
+        {
+            await ApplicationDbContextSeeder.SeedAsync(context, cancellationToken);
+        }
     }
 }

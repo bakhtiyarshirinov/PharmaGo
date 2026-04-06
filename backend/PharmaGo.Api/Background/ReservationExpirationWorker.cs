@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
+using PharmaGo.Api.Observability;
 using PharmaGo.Api.Realtime;
 using PharmaGo.Application.Abstractions;
 using PharmaGo.Application.Reservations.Queries.GetReservation;
@@ -11,8 +12,11 @@ namespace PharmaGo.Api.Background;
 public class ReservationExpirationWorker(
     IServiceScopeFactory scopeFactory,
     IOptions<ReservationExpirationSettings> settings,
-    ILogger<ReservationExpirationWorker> logger) : BackgroundService
+    ILogger<ReservationExpirationWorker> logger,
+    BackgroundWorkerExecutionMonitor executionMonitor,
+    PharmaGoMetrics metrics) : BackgroundService
 {
+    public const string WorkerName = "reservation_expiration";
     private readonly ReservationExpirationSettings _settings = settings.Value;
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -25,6 +29,8 @@ public class ReservationExpirationWorker(
             }
             catch (Exception exception)
             {
+                executionMonitor.RecordFailure(WorkerName, exception);
+                metrics.RecordBackgroundWorkerFailure(WorkerName);
                 logger.LogError(exception, "Reservation expiration worker iteration failed.");
             }
 
@@ -59,6 +65,8 @@ public class ReservationExpirationWorker(
 
         if (reservations.Count == 0)
         {
+            executionMonitor.RecordSuccess(WorkerName, 0);
+            metrics.RecordBackgroundWorkerRun(WorkerName);
             return;
         }
 
@@ -135,6 +143,9 @@ public class ReservationExpirationWorker(
                 cancellationToken: cancellationToken);
         }
 
+        executionMonitor.RecordSuccess(WorkerName, reservations.Count);
+        metrics.RecordBackgroundWorkerRun(WorkerName);
+        metrics.RecordBackgroundWorkerProcessed(WorkerName, reservations.Count);
         logger.LogInformation("Expired {Count} reservations.", reservations.Count);
     }
 }

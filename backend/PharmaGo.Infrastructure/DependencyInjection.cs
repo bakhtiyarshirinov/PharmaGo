@@ -34,6 +34,7 @@ public static class DependencyInjection
         services.Configure<JwtSettings>(configuration.GetSection(JwtSettings.SectionName));
         services.Configure<RefreshTokenSettings>(configuration.GetSection(RefreshTokenSettings.SectionName));
         services.Configure<RedisSettings>(configuration.GetSection(RedisSettings.SectionName));
+        services.Configure<DatabaseSeedSettings>(configuration.GetSection(DatabaseSeedSettings.SectionName));
 
         if (string.IsNullOrWhiteSpace(redisSettings.ConnectionString))
         {
@@ -105,6 +106,8 @@ public static class DependencyInjection
                 policy.RequireClaim(RolePermissionProvider.PermissionClaimType, PermissionNames.ManageUsers));
             options.AddPolicy(PolicyNames.ManagePharmacies, policy =>
                 policy.RequireClaim(RolePermissionProvider.PermissionClaimType, PermissionNames.ManagePharmacies));
+            options.AddPolicy(PolicyNames.ManageMasterData, policy =>
+                policy.RequireClaim(RolePermissionProvider.PermissionClaimType, PermissionNames.ManageMasterData));
             options.AddPolicy(PolicyNames.ManageOrders, policy =>
                 policy.RequireClaim(RolePermissionProvider.PermissionClaimType, PermissionNames.ManageOrders));
             options.AddPolicy(PolicyNames.ManageInventory, policy =>

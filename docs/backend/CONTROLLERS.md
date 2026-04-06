@@ -38,6 +38,7 @@ Important details:
 - stores only hashed refresh tokens in the database
 - uses refresh token rotation on every successful refresh request
 - moderator role assignment is blocked in the legacy role-only endpoint to keep user management consistent
+- pharmacists cannot create reservations because they do not receive the `reservations.create` permission claim
 
 ## MedicinesController
 File: `backend/PharmaGo.Api/Controllers/MedicinesController.cs`
@@ -207,6 +208,42 @@ Important details:
 - write operations invalidate dashboard and user-management cache scopes because pharmacy names and totals surface there
 - create, update, schedule, deactivate and restore all write audit records
 
+## AdminMasterDataController
+File: `backend/PharmaGo.Api/Controllers/AdminMasterDataController.cs`
+
+Purpose:
+- gives moderators a minimal admin surface for changing core master data without touching the database directly
+
+Endpoints:
+- `GET /api/admin/master-data/categories`
+- `GET /api/admin/master-data/categories/{id}`
+- `POST /api/admin/master-data/categories`
+- `PUT /api/admin/master-data/categories/{id}`
+- `GET /api/admin/master-data/medicines`
+- `GET /api/admin/master-data/medicines/{id}`
+- `POST /api/admin/master-data/medicines`
+- `PUT /api/admin/master-data/medicines/{id}`
+- `GET /api/admin/master-data/pharmacy-chains`
+- `GET /api/admin/master-data/pharmacy-chains/{id}`
+- `POST /api/admin/master-data/pharmacy-chains`
+- `PUT /api/admin/master-data/pharmacy-chains/{id}`
+- `GET /api/admin/master-data/depots`
+- `GET /api/admin/master-data/depots/{id}`
+- `POST /api/admin/master-data/depots`
+- `PUT /api/admin/master-data/depots/{id}`
+- `GET /api/admin/master-data/supplier-medicines`
+- `GET /api/admin/master-data/supplier-medicines/{id}`
+- `POST /api/admin/master-data/supplier-medicines`
+- `PUT /api/admin/master-data/supplier-medicines/{id}`
+
+Important details:
+- moderator only
+- all list endpoints are paged and sortable
+- medicine write endpoints validate category existence and barcode uniqueness
+- supplier-offer write endpoints validate unique `depot + medicine` pairs
+- medicine writes invalidate medicine-search cache scope
+- all create and update actions write structured audit entries
+
 ## UsersController
 File: `backend/PharmaGo.Api/Controllers/UsersController.cs`
 
@@ -250,6 +287,7 @@ Important details:
 - existing `/api/...` routes remain available as backward-compatible aliases
 - Swagger now publishes versioned documentation for `v1`
 - auth, public search and reservation-create endpoints are additionally protected by fixed-window rate limiting
+- health endpoints expose `/health/live` and `/health/ready` with JSON payloads for liveness and readiness monitoring
 
 ## ReservationsController
 File: `backend/PharmaGo.Api/Controllers/ReservationsController.cs`

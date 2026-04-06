@@ -33,6 +33,7 @@
 - Moderator endpoints:
   - `GET|POST|PUT|DELETE /api/users*`
   - `GET|POST|PUT|DELETE /api/admin/pharmacies*`
+  - `GET|POST|PUT /api/admin/master-data/*`
   - `PUT /api/auth/users/{id}/role`
 
 ## Role Matrix
@@ -41,7 +42,7 @@
 | --- | --- | --- | --- | --- |
 | Public medicine/pharmacy discovery | Yes | Yes | Yes | Yes |
 | Favorites, recents, notifications inbox | No | Yes | Yes | Yes |
-| Create reservation | No | Yes | Yes | Yes |
+| Create reservation | No | Yes | No | Yes |
 | Own reservations | No | Yes | Yes | Yes |
 | Pharmacy reservation operations | No | No | Yes | Yes |
 | Stock alerts and stock mutations | No | No | Yes | Yes |
@@ -49,11 +50,13 @@
 | Audit logs | No | No | Yes | Yes |
 | User management | No | No | No | Yes |
 | Pharmacy admin and schedule management | No | No | No | Yes |
+| Master-data admin | No | No | No | Yes |
 | Role reassignment | No | No | No | Yes |
 
 ## Notes
 
 - Pharmacists are pharmacy-scoped unless they also have moderator role.
+- Pharmacists can work with reservation lifecycle and inventory, but they cannot create reservations on behalf of customers.
 - Moderators can access cross-pharmacy staff views.
 - Unversioned `/api/...` routes remain supported as backward-compatible aliases.
 - Versioned `/api/v1/...` routes are the canonical contract for new clients.

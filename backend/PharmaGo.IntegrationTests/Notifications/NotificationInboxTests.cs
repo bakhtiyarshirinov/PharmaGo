@@ -209,6 +209,9 @@ public class NotificationInboxTests(CustomWebApplicationFactory factory) : IClas
         Assert.NotNull(pharmacistAuth);
         pharmacistClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", pharmacistAuth!.AccessToken);
 
+        var confirmResponse = await pharmacistClient.PostAsync($"/api/reservations/{reservation!.ReservationId}/confirm", null);
+        Assert.Equal(HttpStatusCode.OK, confirmResponse.StatusCode);
+
         var readyResponse = await pharmacistClient.PostAsync($"/api/reservations/{reservation!.ReservationId}/ready-for-pickup", null);
         Assert.Equal(HttpStatusCode.OK, readyResponse.StatusCode);
 

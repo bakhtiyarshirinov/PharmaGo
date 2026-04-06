@@ -61,7 +61,10 @@ public class ReservationNotificationsTests(CustomWebApplicationFactory factory) 
         Assert.NotNull(pharmacistAuth);
         pharmacistClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", pharmacistAuth!.AccessToken);
 
-        var readyResponse = await pharmacistClient.PostAsync($"/api/reservations/{reservation!.ReservationId}/ready-for-pickup", null);
+        var confirmResponse = await pharmacistClient.PostAsync($"/api/reservations/{reservation!.ReservationId}/confirm", null);
+        Assert.Equal(HttpStatusCode.OK, confirmResponse.StatusCode);
+
+        var readyResponse = await pharmacistClient.PostAsync($"/api/reservations/{reservation.ReservationId}/ready-for-pickup", null);
         Assert.Equal(HttpStatusCode.OK, readyResponse.StatusCode);
 
         var readyLog = await db.NotificationDeliveryLogs
@@ -113,6 +116,20 @@ public class ReservationNotificationsTests(CustomWebApplicationFactory factory) 
 
         var reservation = await createResponse.Content.ReadAsAsync<ReservationResponse>();
         Assert.NotNull(reservation);
+
+        var pharmacistClient = factory.CreateClient();
+        var pharmacistLogin = await pharmacistClient.PostAsJsonAsync("/api/auth/login", new LoginRequest
+        {
+            PhoneNumber = "+994500000001",
+            Password = "Pharmacist123!"
+        });
+
+        var pharmacistAuth = await pharmacistLogin.Content.ReadAsAsync<AuthResponse>();
+        Assert.NotNull(pharmacistAuth);
+        pharmacistClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", pharmacistAuth!.AccessToken);
+
+        var confirmResponse = await pharmacistClient.PostAsync($"/api/reservations/{reservation!.ReservationId}/confirm", null);
+        Assert.Equal(HttpStatusCode.OK, confirmResponse.StatusCode);
 
         var trackedReservation = await db.Reservations.FirstAsync(x => x.Id == reservation!.ReservationId);
         var notificationService = scope.ServiceProvider.GetRequiredService<IReservationNotificationService>();

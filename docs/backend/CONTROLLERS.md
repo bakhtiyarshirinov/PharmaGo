@@ -280,6 +280,7 @@ Endpoints:
   - authenticated
   - creates reservation against available stock in selected pharmacy
   - reserves stock immediately
+  - creates the reservation in `Pending`
   - accepts optional `Idempotency-Key` header for safe client retries
 - `POST /api/reservations/{id}/confirm`
   - pharmacist or moderator
@@ -307,6 +308,7 @@ Important details:
 - returns problem-details payloads for idempotency conflicts, stock conflicts and invalid lifecycle transitions
 - groups duplicate request lines by medicine before checking stock and creating reservation items
 - reserves from the earliest-expiring stock first
+- create reserves stock immediately but leaves the workflow in `Pending` until staff confirmation
 - wraps reservation writes in database transactions and detects concurrent stock changes
 - persists reservation create idempotency keys per user to prevent duplicate bookings on retry
 - active reservations exclude already elapsed holds even if background expiration has not run yet

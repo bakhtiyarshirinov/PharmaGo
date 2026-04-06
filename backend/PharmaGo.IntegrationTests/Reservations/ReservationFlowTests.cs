@@ -65,7 +65,8 @@ public class ReservationFlowTests(CustomWebApplicationFactory factory) : IClassF
 
         var payload = await reservationResponse.Content.ReadAsAsync<ReservationResponse>();
         Assert.NotNull(payload);
-        Assert.Equal(ReservationStatus.Confirmed, payload!.Status);
+        Assert.Equal(ReservationStatus.Pending, payload!.Status);
+        Assert.Null(payload.ConfirmedAtUtc);
         Assert.Single(payload.Items);
         Assert.NotNull(payload.PickupAvailableFromUtc);
 
@@ -333,6 +334,7 @@ public class ReservationFlowTests(CustomWebApplicationFactory factory) : IClassF
 
         var reservation = await createResponse.Content.ReadAsAsync<ReservationResponse>();
         Assert.NotNull(reservation);
+        Assert.Equal(ReservationStatus.Pending, reservation!.Status);
 
         var pharmacistLogin = await _client.PostAsJsonAsync("/api/auth/login", new LoginRequest
         {
@@ -345,8 +347,14 @@ public class ReservationFlowTests(CustomWebApplicationFactory factory) : IClassF
 
         _client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", pharmacistAuth!.AccessToken);
 
+        var confirmResponse = await _client.PostAsync(
+            $"/api/reservations/{reservation.ReservationId}/confirm",
+            content: null);
+
+        Assert.Equal(HttpStatusCode.OK, confirmResponse.StatusCode);
+
         var readyResponse = await _client.PostAsync(
-            $"/api/reservations/{reservation!.ReservationId}/ready-for-pickup",
+            $"/api/reservations/{reservation.ReservationId}/ready-for-pickup",
             content: null);
 
         Assert.Equal(HttpStatusCode.OK, readyResponse.StatusCode);
@@ -422,6 +430,9 @@ public class ReservationFlowTests(CustomWebApplicationFactory factory) : IClassF
         var pharmacistAuth = await pharmacistLogin.Content.ReadAsAsync<AuthResponse>();
         Assert.NotNull(pharmacistAuth);
         _client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", pharmacistAuth!.AccessToken);
+
+        var confirmResponse = await _client.PostAsync($"/api/reservations/{reservation.ReservationId}/confirm", null);
+        Assert.Equal(HttpStatusCode.OK, confirmResponse.StatusCode);
 
         var readyResponse = await _client.PostAsync($"/api/reservations/{reservation.ReservationId}/ready-for-pickup", null);
         Assert.Equal(HttpStatusCode.OK, readyResponse.StatusCode);
@@ -631,7 +642,7 @@ public class ReservationFlowTests(CustomWebApplicationFactory factory) : IClassF
 
         var timeline = await timelineResponse.Content.ReadAsAsync<IReadOnlyCollection<ReservationTimelineEventResponse>>();
         Assert.NotNull(timeline);
-        Assert.Contains(timeline!, x => x.Action == "reservation.created" && x.Status == ReservationStatus.Confirmed);
+        Assert.Contains(timeline!, x => x.Action == "reservation.created" && x.Status == ReservationStatus.Pending);
         Assert.Contains(timeline!, x => x.Action == "reservation.cancelled" && x.Status == ReservationStatus.Cancelled);
     }
 
@@ -789,12 +800,13 @@ public class ReservationFlowTests(CustomWebApplicationFactory factory) : IClassF
         var stockAfter = await db2.StockItems.AsNoTracking()
             .FirstAsync(x => x.PharmacyId == pharmacyId && x.MedicineId == medicineId);
         var reservations = await db2.Reservations.AsNoTracking()
-            .Where(x => x.PharmacyId == pharmacyId && x.CustomerId != Guid.Empty)
+            .Where(x => x.PharmacyId == pharmacyId &&
+                        (x.CustomerId == auth1!.User.Id || x.CustomerId == auth2!.User.Id))
             .ToListAsync();
 
         Assert.Equal(80, stockAfter.ReservedQuantity);
         Assert.Equal(100, stockAfter.Quantity);
-        Assert.Single(reservations, x => x.Status == ReservationStatus.Confirmed);
+        Assert.Single(reservations, x => x.Status == ReservationStatus.Pending);
     }
 
     private static async Task<AuthResponse?> RegisterAndAuthorizeAsync(HttpClient client, string phoneNumber, string email)

@@ -87,6 +87,7 @@ Supported statuses:
 Workflow rules:
 
 - customer can cancel own active reservation
+- newly created reservations start in `Pending`
 - pharmacist or moderator can confirm, mark ready for pickup, complete or expire reservations
 - `POST /api/reservations` supports optional `Idempotency-Key` header for retry-safe create
 - reservations are held for exactly `2 hours`

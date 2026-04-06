@@ -443,11 +443,10 @@ public class ReservationsController(
                     ReservationNumber = GenerateReservationNumber(),
                     Customer = customer,
                     Pharmacy = pharmacy,
-                    Status = ReservationStatus.Confirmed,
+                    Status = ReservationStatus.Pending,
                     Notes = request.Notes?.Trim(),
                     ReservedUntilUtc = now.AddHours(_reservationPolicy.ReservationLifetimeHours),
                     PickupAvailableFromUtc = pickupAvailableFromUtc ?? now,
-                    ConfirmedAtUtc = now,
                     TelegramChatId = customer.TelegramChatId
                 };
 
@@ -1012,7 +1011,7 @@ public class ReservationsController(
 
         return action switch
         {
-            "reservation.created" => ReservationStatus.Confirmed,
+            "reservation.created" => ReservationStatus.Pending,
             "reservation.confirmed" => ReservationStatus.Confirmed,
             "reservation.ready_for_pickup" => ReservationStatus.ReadyForPickup,
             "reservation.completed" => ReservationStatus.Completed,

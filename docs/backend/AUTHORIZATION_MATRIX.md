@@ -32,6 +32,7 @@
   - `POST /api/reservations/{id}/expire`
 - Moderator endpoints:
   - `GET|POST|PUT|DELETE /api/users*`
+  - `GET|POST|PUT|DELETE /api/admin/pharmacies*`
   - `PUT /api/auth/users/{id}/role`
 
 ## Role Matrix
@@ -47,6 +48,7 @@
 | Dashboard | No | No | Yes | Yes |
 | Audit logs | No | No | Yes | Yes |
 | User management | No | No | No | Yes |
+| Pharmacy admin and schedule management | No | No | No | Yes |
 | Role reassignment | No | No | No | Yes |
 
 ## Notes

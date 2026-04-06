@@ -47,6 +47,7 @@ The backend solves four main business flows:
 - `MeMedicinesController`: authenticated consumer medicine feeds for favorites and recent views
 - `PharmaciesController`: nearby pharmacy discovery, map pins, autocomplete, popular feed, pharmacy cards and pharmacy catalog browsing
 - `MePharmaciesController`: authenticated consumer pharmacy feeds for favorites and recent views
+- `AdminPharmaciesController`: moderator-only pharmacy CRUD, schedule management and soft delete/restore
 - `ReservationsController`: create reservation, active/timeline lookup and explicit lifecycle commands
 - `NotificationsController`: authenticated notification preferences, paged inbox history, unread preview and read-status actions for consumer delivery settings
 - `StocksController`: pharmacy stock CRUD, explicit inventory commands and operational stock alerts
@@ -110,6 +111,7 @@ Workflow rules:
 - auth, search/suggestions and reservation-create endpoints are protected by fixed-window rate limits and return `429` problem-details payloads when throttled
 - hot read endpoints use distributed cache versioning for safe invalidation
 - if `Redis:ConnectionString` is empty, the app falls back to in-memory distributed cache
+- moderators can manage pharmacy profiles and opening-hours schedules through dedicated admin endpoints
 - inventory staff flows support explicit `adjust`, `receive` and `writeoff` commands in addition to the generic stock update endpoint
 - stock alerts cover `low-stock`, `restock-suggestions`, `out-of-stock` and `expiring`
 

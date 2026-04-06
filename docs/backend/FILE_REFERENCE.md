@@ -23,6 +23,7 @@ This file documents the purpose of every backend source file currently in the re
 - `backend/PharmaGo.Api/Controllers/MedicinesController.cs`: public medicine search, recommendation, popular-feed and availability endpoints.
 - `backend/PharmaGo.Api/Controllers/MeMedicinesController.cs`: authenticated consumer medicine feeds for favorites and recent views.
 - `backend/PharmaGo.Api/Controllers/PharmaciesController.cs`: public nearby-pharmacy discovery, popular-feed and catalog endpoints with geo filters and paging.
+- `backend/PharmaGo.Api/Controllers/AdminPharmaciesController.cs`: moderator-only pharmacy CRUD, schedule management and restore endpoints.
 - `backend/PharmaGo.Api/Controllers/MePharmaciesController.cs`: authenticated consumer pharmacy feeds for favorites and recent views.
 - `backend/PharmaGo.Api/Controllers/UsersController.cs`: moderator-only user management endpoints with soft delete and restore.
 - `backend/PharmaGo.Api/Controllers/ReservationsController.cs`: reservation create, active/timeline lookup and explicit workflow transition endpoints.
@@ -111,6 +112,10 @@ This file documents the purpose of every backend source file currently in the re
 - `backend/PharmaGo.Application/Medicines/Queries/SearchMedicines/MedicineSearchResponse.cs`: medicine search result DTO including catalog data and stock aggregates.
 
 ### Pharmacies
+- `backend/PharmaGo.Application/Pharmacies/Contracts/CreateManagedPharmacyRequest.cs`: moderator request contract for creating a pharmacy with contact, geo and schedule data.
+- `backend/PharmaGo.Application/Pharmacies/Contracts/ManagedPharmacyResponse.cs`: moderator-facing pharmacy DTO with chain, activity counters and schedule fields.
+- `backend/PharmaGo.Application/Pharmacies/Contracts/UpdateManagedPharmacyRequest.cs`: moderator request contract for editing a pharmacy profile and service flags.
+- `backend/PharmaGo.Application/Pharmacies/Contracts/UpdatePharmacyScheduleRequest.cs`: focused moderator request contract for opening-hours updates.
 - `backend/PharmaGo.Application/Pharmacies/Queries/GetConsumerPharmacyFeed/ConsumerPharmacyFeedItemResponse.cs`: DTO for popular, favorite and recent consumer pharmacy feeds with personalization flags.
 - `backend/PharmaGo.Application/Pharmacies/Queries/GetNearbyPharmacyMap/GetNearbyPharmacyMapRequest.cs`: query model for lightweight map-pin pharmacy discovery.
 - `backend/PharmaGo.Application/Pharmacies/Queries/GetNearbyPharmacyMap/NearbyPharmacyMapResponse.cs`: lightweight pharmacy map-pin DTO with distance and matching summary.
@@ -270,7 +275,7 @@ This file documents the purpose of every backend source file currently in the re
 - `backend/PharmaGo.Infrastructure/Services/PharmacyCatalogService.cs`: builds pharmacy-card and pharmacy-centric medicine catalog read models.
 - `backend/PharmaGo.Infrastructure/Services/PharmacyConsumerService.cs`: builds consumer popular/favorite/recent pharmacy feeds and records favorite/recent interactions.
 - `backend/PharmaGo.Infrastructure/Services/PharmacyDiscoveryService.cs`: searches nearby pharmacies with geo, opening-hours and availability summary calculations.
-- `backend/PharmaGo.Infrastructure/Services/PharmacyDiscoverySupport.cs`: shared helpers for distance calculation, opening-hours evaluation and next pickup-available time resolution.
+- `backend/PharmaGo.Infrastructure/Services/PharmacyDiscoverySupport.cs`: shared helpers for distance calculation, opening-hours evaluation, schedule normalization and next pickup-available time resolution.
 - `backend/PharmaGo.Infrastructure/Services/RefreshTokenService.cs`: generates, hashes, rotates and revokes refresh tokens.
 - `backend/PharmaGo.Infrastructure/Services/ReservationStateService.cs`: encapsulates stock release and stock deduction rules for reservation state changes and fails fast on inconsistent reserved quantities.
 - `backend/PharmaGo.Infrastructure/Services/ReservationTransitionPolicy.cs`: central policy for reservation state transitions and actor permission checks.
@@ -301,6 +306,7 @@ This file documents the purpose of every backend source file currently in the re
 - `backend/PharmaGo.IntegrationTests/Pharmacies/PharmacyCatalogTests.cs`: covers pharmacy-card lookup and pharmacy-centric medicine catalog browsing.
 - `backend/PharmaGo.IntegrationTests/Pharmacies/ConsumerPharmacyFlowTests.cs`: covers consumer popular pharmacies feed, favorites and recent-view tracking.
 - `backend/PharmaGo.IntegrationTests/Pharmacies/PharmacyDiscoveryTests.cs`: covers nearby-pharmacy discovery, open-now filtering and invalid geo input handling.
+- `backend/PharmaGo.IntegrationTests/Pharmacies/PharmacyManagementTests.cs`: covers moderator pharmacy CRUD, schedule validation and pharmacy-admin authorization rules.
 - `backend/PharmaGo.IntegrationTests/Pharmacies/PharmacySuggestionsTests.cs`: covers pharmacy autocomplete and lightweight nearby-map pin endpoints.
 - `backend/PharmaGo.IntegrationTests/Reservations/ReservationFlowTests.cs`: covers authenticated reservation creation, explicit lifecycle commands, active/timeline reads and concurrent reservation hardening.
 - `backend/PharmaGo.IntegrationTests/Stocks/StockManagementTests.cs`: covers explicit stock adjust/receive/writeoff commands and operational stock alerts.

@@ -14,6 +14,7 @@ public static class RolePermissionProvider
             UserRole.Moderator =>
             [
                 PermissionNames.ManageUsers,
+                PermissionNames.ManagePharmacies,
                 PermissionNames.ManageOrders,
                 PermissionNames.ManageInventory,
                 PermissionNames.ViewDashboard,

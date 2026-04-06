@@ -5,6 +5,7 @@ namespace PharmaGo.Infrastructure.Services;
 
 public static class PharmacyDiscoverySupport
 {
+    public const string DefaultTimeZoneId = "Asia/Baku";
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
 
     public static double? CalculateDistanceKm(
@@ -172,6 +173,102 @@ public static class PharmacyDiscoverySupport
         return null;
     }
 
+    public static bool TryNormalizeOpeningHoursJson(
+        string? openingHoursJson,
+        out string? normalizedJson,
+        out string? errorMessage)
+    {
+        normalizedJson = null;
+        errorMessage = null;
+
+        if (string.IsNullOrWhiteSpace(openingHoursJson))
+        {
+            return true;
+        }
+
+        try
+        {
+            var schedule = JsonSerializer.Deserialize<OpeningHoursDocument>(openingHoursJson, JsonOptions);
+            if (schedule?.Weekly is null || schedule.Weekly.Count == 0)
+            {
+                errorMessage = "Opening hours must include at least one weekly schedule entry.";
+                return false;
+            }
+
+            var timeZone = string.IsNullOrWhiteSpace(schedule.TimeZone)
+                ? DefaultTimeZoneId
+                : schedule.TimeZone.Trim();
+
+            ResolveTimeZone(timeZone);
+
+            var seenDays = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            var normalizedEntries = new List<OpeningHoursEntry>();
+
+            foreach (var entry in schedule.Weekly)
+            {
+                var day = NormalizeDay(entry.Day);
+                if (string.IsNullOrWhiteSpace(day))
+                {
+                    errorMessage = "Opening hours contain an invalid day value.";
+                    return false;
+                }
+
+                if (!seenDays.Add(day))
+                {
+                    errorMessage = "Opening hours cannot contain duplicate day entries.";
+                    return false;
+                }
+
+                if (!TryParseTime(entry.Open, out var openTime) ||
+                    !TryParseTime(entry.Close, out var closeTime))
+                {
+                    errorMessage = "Opening hours must use HH:mm time values.";
+                    return false;
+                }
+
+                if (openTime == closeTime)
+                {
+                    errorMessage = "Opening hours cannot use the same open and close time.";
+                    return false;
+                }
+
+                normalizedEntries.Add(new OpeningHoursEntry
+                {
+                    Day = day,
+                    Open = openTime.ToString("HH:mm", CultureInfo.InvariantCulture),
+                    Close = closeTime.ToString("HH:mm", CultureInfo.InvariantCulture)
+                });
+            }
+
+            normalizedJson = JsonSerializer.Serialize(
+                new OpeningHoursDocument
+                {
+                    TimeZone = timeZone,
+                    Weekly = normalizedEntries
+                        .OrderBy(x => DayOrder(x.Day))
+                        .ToArray()
+                },
+                JsonOptions);
+
+            return true;
+        }
+        catch (JsonException)
+        {
+            errorMessage = "Opening hours must be valid JSON.";
+            return false;
+        }
+        catch (TimeZoneNotFoundException)
+        {
+            errorMessage = "Opening hours contain an unsupported time zone.";
+            return false;
+        }
+        catch (InvalidTimeZoneException)
+        {
+            errorMessage = "Opening hours contain an invalid time zone.";
+            return false;
+        }
+    }
+
     private static bool TryParseTime(string? value, out TimeOnly time)
     {
         return TimeOnly.TryParseExact(
@@ -196,7 +293,7 @@ public static class PharmacyDiscoverySupport
     {
         if (string.IsNullOrWhiteSpace(timeZoneId))
         {
-            return TimeZoneInfo.Utc;
+            return TimeZoneInfo.FindSystemTimeZoneById(DefaultTimeZoneId);
         }
 
         return TimeZoneInfo.FindSystemTimeZoneById(timeZoneId);
@@ -223,6 +320,18 @@ public static class PharmacyDiscoverySupport
 
         return value.Trim()[..Math.Min(3, value.Trim().Length)].ToLowerInvariant();
     }
+
+    private static int DayOrder(string? value) => NormalizeDay(value) switch
+    {
+        "mon" => 1,
+        "tue" => 2,
+        "wed" => 3,
+        "thu" => 4,
+        "fri" => 5,
+        "sat" => 6,
+        "sun" => 7,
+        _ => int.MaxValue
+    };
 
     private static double DegreesToRadians(double degrees) => degrees * Math.PI / 180d;
 

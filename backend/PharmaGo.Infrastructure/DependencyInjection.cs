@@ -103,6 +103,8 @@ public static class DependencyInjection
         {
             options.AddPolicy(PolicyNames.ManageUsers, policy =>
                 policy.RequireClaim(RolePermissionProvider.PermissionClaimType, PermissionNames.ManageUsers));
+            options.AddPolicy(PolicyNames.ManagePharmacies, policy =>
+                policy.RequireClaim(RolePermissionProvider.PermissionClaimType, PermissionNames.ManagePharmacies));
             options.AddPolicy(PolicyNames.ManageOrders, policy =>
                 policy.RequireClaim(RolePermissionProvider.PermissionClaimType, PermissionNames.ManageOrders));
             options.AddPolicy(PolicyNames.ManageInventory, policy =>

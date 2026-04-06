@@ -170,6 +170,43 @@ Important details:
 - recent pharmacy feed is driven by actual pharmacy-card views
 - favorite and recent tables are additive user-personalization storage and do not affect existing pharmacy contracts
 
+## AdminPharmaciesController
+File: `backend/PharmaGo.Api/Controllers/AdminPharmaciesController.cs`
+
+Purpose:
+- gives moderators a dedicated pharmacy-management API for CRUD and schedule administration
+
+Endpoints:
+- `GET /api/admin/pharmacies`
+  - moderator only
+  - supports `search`, `city`, `isActive`, `supportsReservations`, `hasDelivery`, `page`, `pageSize`, `sortBy` and `sortDirection`
+- `GET /api/admin/pharmacies/{id}`
+  - moderator only
+  - returns a single managed pharmacy card with staff, stock and active-reservation counters
+- `POST /api/admin/pharmacies`
+  - moderator only
+  - creates a pharmacy with contacts, geo coordinates, schedule and service flags
+- `PUT /api/admin/pharmacies/{id}`
+  - moderator only
+  - updates pharmacy profile, chain relation, coordinates, schedule and service flags
+- `PUT /api/admin/pharmacies/{id}/schedule`
+  - moderator only
+  - updates only the pharmacy opening-hours configuration
+- `DELETE /api/admin/pharmacies/{id}`
+  - moderator only
+  - soft deletes a pharmacy by marking it inactive
+- `POST /api/admin/pharmacies/{id}/restore`
+  - moderator only
+  - restores an inactive pharmacy
+
+Important details:
+- non-24-hour pharmacies must provide valid opening-hours JSON
+- schedule payloads are normalized and default missing timezone values to `Asia/Baku`
+- coordinates are synchronized into both numeric discovery fields and legacy string latitude/longitude fields
+- deactivation is blocked while the pharmacy still has active reservations
+- write operations invalidate dashboard and user-management cache scopes because pharmacy names and totals surface there
+- create, update, schedule, deactivate and restore all write audit records
+
 ## UsersController
 File: `backend/PharmaGo.Api/Controllers/UsersController.cs`
 

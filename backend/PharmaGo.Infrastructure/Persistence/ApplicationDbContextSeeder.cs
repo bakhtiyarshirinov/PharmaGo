@@ -28,6 +28,7 @@ public static class ApplicationDbContextSeeder
 
         await EnsureShowcaseUserSignalsAsync(context, userMap, medicineMap, pharmacyMap, utcNow, cancellationToken);
         await EnsureShowcaseReservationsAsync(context, userMap, medicineMap, pharmacyMap, utcNow, cancellationToken);
+        await ReconcileActiveReservationStockAsync(context, cancellationToken);
 
         await context.SaveChangesAsync(cancellationToken);
     }
@@ -543,40 +544,128 @@ public static class ApplicationDbContextSeeder
                 .Include(x => x.Items)
                 .FirstOrDefaultAsync(x => x.ReservationNumber == spec.ReservationNumber, cancellationToken);
 
-            if (reservation is not null)
+            if (reservation is null)
+            {
+                reservation = new Reservation
+                {
+                    ReservationNumber = spec.ReservationNumber,
+                    ConcurrencyToken = Guid.NewGuid()
+                };
+
+                foreach (var itemSpec in spec.Items)
+                {
+                    reservation.Items.Add(new ReservationItem
+                    {
+                        MedicineId = medicineMap[itemSpec.MedicineBrandName].Id,
+                        Quantity = itemSpec.Quantity,
+                        UnitPrice = itemSpec.UnitPrice
+                    });
+                }
+
+                await context.Reservations.AddAsync(reservation, cancellationToken);
+            }
+
+            reservation.CustomerId = userMap[spec.UserPhone].Id;
+            reservation.PharmacyId = pharmacyMap[spec.PharmacyName].Id;
+            reservation.Status = spec.Status;
+            reservation.ReservedUntilUtc = spec.ReservedUntilUtc;
+            reservation.PickupAvailableFromUtc = ResolveShowcasePickupAvailableFromUtc(spec, utcNow);
+            reservation.ConfirmedAtUtc = spec.ConfirmedAtUtc;
+            reservation.ReadyForPickupAtUtc = spec.ReadyForPickupAtUtc;
+            reservation.CompletedAtUtc = spec.CompletedAtUtc;
+            reservation.CancelledAtUtc = spec.CancelledAtUtc;
+            reservation.ExpiredAtUtc = spec.Status == ReservationStatus.Expired ? utcNow : null;
+            reservation.TotalAmount = spec.TotalAmount;
+            reservation.Notes = "Mock showcase reservation";
+        }
+    }
+
+    private static async Task ReconcileActiveReservationStockAsync(
+        ApplicationDbContext context,
+        CancellationToken cancellationToken)
+    {
+        var activeStatuses = new[]
+        {
+            ReservationStatus.Pending,
+            ReservationStatus.Confirmed,
+            ReservationStatus.ReadyForPickup
+        };
+
+        var reservationDemand = await context.Reservations
+            .AsNoTracking()
+            .Where(x => activeStatuses.Contains(x.Status))
+            .SelectMany(
+                reservation => reservation.Items,
+                (reservation, item) => new
+                {
+                    reservation.PharmacyId,
+                    item.MedicineId,
+                    item.Quantity
+                })
+            .GroupBy(x => new { x.PharmacyId, x.MedicineId })
+            .Select(group => new
+            {
+                group.Key.PharmacyId,
+                group.Key.MedicineId,
+                RequiredReservedQuantity = group.Sum(x => x.Quantity)
+            })
+            .ToListAsync(cancellationToken);
+
+        foreach (var demand in reservationDemand)
+        {
+            var stockItems = await context.StockItems
+                .Where(x =>
+                    x.PharmacyId == demand.PharmacyId &&
+                    x.MedicineId == demand.MedicineId &&
+                    x.IsActive &&
+                    x.IsReservable)
+                .OrderBy(x => x.ExpirationDate)
+                .ToListAsync(cancellationToken);
+
+            if (stockItems.Count == 0)
             {
                 continue;
             }
 
-            reservation = new Reservation
-            {
-                ReservationNumber = spec.ReservationNumber,
-                CustomerId = userMap[spec.UserPhone].Id,
-                PharmacyId = pharmacyMap[spec.PharmacyName].Id,
-                Status = spec.Status,
-                ReservedUntilUtc = spec.ReservedUntilUtc,
-                ConfirmedAtUtc = spec.ConfirmedAtUtc,
-                ReadyForPickupAtUtc = spec.ReadyForPickupAtUtc,
-                CompletedAtUtc = spec.CompletedAtUtc,
-                CancelledAtUtc = spec.CancelledAtUtc,
-                ExpiredAtUtc = spec.Status == ReservationStatus.Expired ? utcNow : null,
-                TotalAmount = spec.TotalAmount,
-                Notes = "Mock showcase reservation",
-                ConcurrencyToken = Guid.NewGuid()
-            };
+            var currentReservedQuantity = stockItems.Sum(x => x.ReservedQuantity);
+            var quantityToReserve = demand.RequiredReservedQuantity - currentReservedQuantity;
 
-            foreach (var itemSpec in spec.Items)
+            if (quantityToReserve <= 0)
             {
-                reservation.Items.Add(new ReservationItem
-                {
-                    MedicineId = medicineMap[itemSpec.MedicineBrandName].Id,
-                    Quantity = itemSpec.Quantity,
-                    UnitPrice = itemSpec.UnitPrice
-                });
+                continue;
             }
 
-            await context.Reservations.AddAsync(reservation, cancellationToken);
+            foreach (var stockItem in stockItems)
+            {
+                if (quantityToReserve == 0)
+                {
+                    break;
+                }
+
+                var freeCapacity = Math.Max(0, stockItem.Quantity - stockItem.ReservedQuantity);
+                if (freeCapacity == 0)
+                {
+                    continue;
+                }
+
+                var quantity = Math.Min(quantityToReserve, freeCapacity);
+                stockItem.ReservedQuantity += quantity;
+                quantityToReserve -= quantity;
+            }
         }
+    }
+
+    private static DateTime ResolveShowcasePickupAvailableFromUtc(ReservationSeedSpec spec, DateTime utcNow)
+    {
+        return spec.Status switch
+        {
+            ReservationStatus.Completed => spec.CompletedAtUtc ?? spec.ReservedUntilUtc,
+            ReservationStatus.Cancelled => spec.CancelledAtUtc ?? spec.ReservedUntilUtc,
+            ReservationStatus.Expired => spec.ReservedUntilUtc,
+            ReservationStatus.ReadyForPickup => spec.ReadyForPickupAtUtc ?? utcNow,
+            ReservationStatus.Confirmed => spec.ConfirmedAtUtc ?? utcNow,
+            _ => utcNow
+        };
     }
 
     private static string TwentyFourHoursJson()

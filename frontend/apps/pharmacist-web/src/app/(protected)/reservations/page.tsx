@@ -1,15 +1,8 @@
-import { EmptyState, PageHeader } from '@pharmago/ui'
+import { readSessionMeta } from '@pharmago/auth/server'
+import { ReservationQueueScreen } from '../../../modules/reservations/ReservationQueueScreen'
 
-export default function PharmacistReservationsPage() {
-  return (
-    <div className="space-y-8">
-      <PageHeader
-        eyebrow="Reservation queue"
-        title="Confirm, prepare and complete reservations fast."
-        description="This screen should be optimized for queue handling, not for browsing."
-      />
-      <EmptyState title="Reservation queue scaffold" description="Wire active reservations, detail drawer and action buttons here." />
-    </div>
-  )
+export default async function PharmacistReservationsPage() {
+  const session = await readSessionMeta()
+
+  return <ReservationQueueScreen initialSession={session} />
 }
-

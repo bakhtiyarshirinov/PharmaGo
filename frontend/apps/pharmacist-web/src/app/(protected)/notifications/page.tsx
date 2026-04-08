@@ -1,15 +1,8 @@
-import { EmptyState, PageHeader } from '@pharmago/ui'
+import { readSessionMeta } from '@pharmago/auth/server'
+import { NotificationsScreen } from '../../../modules/notifications/NotificationsScreen'
 
-export default function NotificationsPage() {
-  return (
-    <div className="space-y-8">
-      <PageHeader
-        eyebrow="Ops inbox"
-        title="Notification inbox for shift-critical events."
-        description="Unread alerts, reservation state changes and stock pressure should surface here with fast actions."
-      />
-      <EmptyState title="Notifications scaffold" description="Connect notifications history, unread count and preferences here." />
-    </div>
-  )
+export default async function NotificationsPage() {
+  const session = await readSessionMeta()
+
+  return <NotificationsScreen initialSession={session} />
 }
-

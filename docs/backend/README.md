@@ -125,6 +125,40 @@ Workflow rules:
 - expired batches are rejected on stock create/update and ignored by low-stock and restock-suggestion alerts
 - reservation, notification and background-worker flows now emit structured logs and `System.Diagnostics.Metrics` counters for basic operational visibility
 
+## Minimal Pharmacist Bootstrap
+If the database is empty and broad demo seed is disabled, use the dedicated minimal bootstrap for `pharmacist-web` smoke testing:
+
+```bash
+./scripts/bootstrap-pharmacist-smoke.sh
+```
+
+This creates only the minimum deterministic dataset required for staff smoke checks:
+
+- `1` pharmacy
+- `1` pharmacist login
+- `1` supporting customer user
+- `3` medicines
+- `3` stock items
+- `2` reservations
+- `3` inbox notifications
+
+Bootstrap credentials:
+
+- `+994509990001` / `Pharmacist123!`
+
+For a full repeatable smoke run against backend plus `pharmacist-web`, use:
+
+```bash
+./scripts/smoke-pharmacist-web.sh
+```
+
+The smoke script:
+
+- bootstraps the clean database
+- starts backend if it is not already running
+- starts `pharmacist-web` if it is not already running
+- validates login, session, dashboard, reservations, reservation detail, inventory and notifications
+
 Read these next:
 
 - `docs/backend/CONTROLLERS.md`

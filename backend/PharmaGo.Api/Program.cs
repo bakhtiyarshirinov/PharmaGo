@@ -20,6 +20,8 @@ using PharmaGo.Infrastructure.Persistence;
 
 var builder = WebApplication.CreateBuilder(args);
 const string FrontendCorsPolicy = "FrontendDev";
+var bootstrapPharmacistSmoke = args.Any(argument =>
+    string.Equals(argument, "--bootstrap-pharmacist-smoke", StringComparison.OrdinalIgnoreCase));
 
 builder.Services.AddInfrastructure(builder.Configuration);
 builder.Services.AddProblemDetails();
@@ -79,6 +81,10 @@ builder.Services.AddCors(options =>
     options.AddPolicy(FrontendCorsPolicy, policy =>
     {
         policy.WithOrigins(
+                "http://localhost:3000",
+                "http://127.0.0.1:3000",
+                "http://localhost:3001",
+                "http://127.0.0.1:3001",
                 "http://localhost:5173",
                 "http://127.0.0.1:5173",
                 "http://localhost:4173",
@@ -118,6 +124,28 @@ var app = builder.Build();
 if (!app.Environment.IsEnvironment("Testing"))
 {
     await app.Services.InitializeDatabaseAsync();
+}
+
+if (bootstrapPharmacistSmoke)
+{
+    using var scope = app.Services.CreateScope();
+    var context = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+    var bootstrapResult = await PharmacistSmokeBootstrapSeeder.SeedAsync(context);
+
+    app.Logger.LogInformation(
+        "Minimal pharmacist smoke bootstrap completed for pharmacy {PharmacyName} ({PharmacyId}). Pharmacist: {PhoneNumber}.",
+        bootstrapResult.PharmacyName,
+        bootstrapResult.PharmacyId,
+        bootstrapResult.PharmacistPhoneNumber);
+
+    Console.WriteLine("Pharmacist smoke bootstrap completed.");
+    Console.WriteLine($"Pharmacy: {bootstrapResult.PharmacyName} ({bootstrapResult.PharmacyId})");
+    Console.WriteLine($"Phone: {bootstrapResult.PharmacistPhoneNumber}");
+    Console.WriteLine($"Password: {bootstrapResult.PharmacistPassword}");
+    Console.WriteLine($"Pending reservation: {bootstrapResult.PendingReservationNumber}");
+    Console.WriteLine($"Ready reservation: {bootstrapResult.ReadyReservationNumber}");
+
+    return;
 }
 
 app.UseExceptionHandler();

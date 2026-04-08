@@ -22,6 +22,7 @@ export function AppShell({
               <Link href={userRoutes.pharmacies}>Pharmacies</Link>
               <Link href={userRoutes.reservations}>Reservations</Link>
               <Link href={userRoutes.notifications}>Notifications</Link>
+              <Link href={userRoutes.profile}>Profile</Link>
             </nav>
           </div>
           <div className="flex items-center gap-3">
@@ -36,4 +37,3 @@ export function AppShell({
     </div>
   )
 }
-

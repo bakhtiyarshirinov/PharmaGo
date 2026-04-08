@@ -1,19 +1,72 @@
 'use client'
 
-import { useMutation, useQueryClient } from '@tanstack/react-query'
+import { useMutation, useQueryClient, type QueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
-import { ApiError } from '@pharmago/api-client'
-import type { NotificationPreferences } from '@pharmago/types'
+import type { NotificationHistoryItem, NotificationInboxSummary, NotificationPreferences, PagedResponse } from '@pharmago/types'
+import { getApiErrorMessage } from '../../lib/errors'
+import { queryKeys } from '../../lib/query-keys'
 import { notificationsApi } from './api'
 
-function invalidate(queryClient: ReturnType<typeof useQueryClient>) {
-  queryClient.invalidateQueries({ queryKey: ['notifications', 'history'] })
-  queryClient.invalidateQueries({ queryKey: ['notifications', 'unread'] })
-  queryClient.invalidateQueries({ queryKey: ['notifications', 'preferences'] })
+function invalidate(queryClient: QueryClient) {
+  queryClient.invalidateQueries({ queryKey: queryKeys.notifications.all() })
 }
 
-function getErrorMessage(error: unknown) {
-  return error instanceof ApiError ? error.details?.detail || error.message : 'Action failed'
+function updateNotificationReadState(
+  queryClient: QueryClient,
+  notificationId: string,
+  isRead: boolean,
+) {
+  queryClient.setQueriesData<PagedResponse<NotificationHistoryItem>>(
+    { queryKey: ['notifications', 'history'] },
+    (current) => {
+      if (!current) {
+        return current
+      }
+
+      return {
+        ...current,
+        items: current.items.map((item) =>
+          item.notificationId === notificationId
+            ? {
+                ...item,
+                isRead,
+                readAtUtc: isRead ? new Date().toISOString() : null,
+              }
+            : item,
+        ),
+      }
+    },
+  )
+
+  queryClient.setQueriesData<NotificationInboxSummary>(
+    { queryKey: ['notifications', 'unread'] },
+    (current) => {
+      if (!current) {
+        return current
+      }
+
+      const previewItems = current.previewItems.map((item) =>
+        item.notificationId === notificationId
+          ? {
+              ...item,
+              isRead,
+              readAtUtc: isRead ? new Date().toISOString() : null,
+            }
+          : item,
+      )
+
+      const unreadCount = Math.max(
+        0,
+        current.unreadCount + (isRead ? -1 : 1),
+      )
+
+      return {
+        ...current,
+        unreadCount,
+        previewItems,
+      }
+    },
+  )
 }
 
 export function useMarkNotificationRead() {
@@ -21,8 +74,14 @@ export function useMarkNotificationRead() {
 
   return useMutation({
     mutationFn: (notificationId: string) => notificationsApi.markRead(notificationId),
+    onMutate: async (notificationId) => {
+      await queryClient.cancelQueries({ queryKey: ['notifications', 'history'] })
+      await queryClient.cancelQueries({ queryKey: ['notifications', 'unread'] })
+      updateNotificationReadState(queryClient, notificationId, true)
+      return { notificationId }
+    },
     onSuccess: () => invalidate(queryClient),
-    onError: (error) => toast.error(getErrorMessage(error)),
+    onError: (error) => toast.error(getApiErrorMessage(error, 'Unable to mark notification as read')),
   })
 }
 
@@ -31,8 +90,14 @@ export function useMarkNotificationUnread() {
 
   return useMutation({
     mutationFn: (notificationId: string) => notificationsApi.markUnread(notificationId),
+    onMutate: async (notificationId) => {
+      await queryClient.cancelQueries({ queryKey: ['notifications', 'history'] })
+      await queryClient.cancelQueries({ queryKey: ['notifications', 'unread'] })
+      updateNotificationReadState(queryClient, notificationId, false)
+      return { notificationId }
+    },
     onSuccess: () => invalidate(queryClient),
-    onError: (error) => toast.error(getErrorMessage(error)),
+    onError: (error) => toast.error(getApiErrorMessage(error, 'Unable to mark notification as unread')),
   })
 }
 
@@ -41,11 +106,46 @@ export function useReadAllNotifications() {
 
   return useMutation({
     mutationFn: () => notificationsApi.readAll(),
+    onMutate: async () => {
+      await queryClient.cancelQueries({ queryKey: ['notifications', 'history'] })
+      await queryClient.cancelQueries({ queryKey: ['notifications', 'unread'] })
+
+      queryClient.setQueriesData<PagedResponse<NotificationHistoryItem>>(
+        { queryKey: ['notifications', 'history'] },
+        (current) =>
+          current
+            ? {
+                ...current,
+                items: current.items.map((item) => ({
+                  ...item,
+                  isRead: true,
+                  readAtUtc: item.readAtUtc ?? new Date().toISOString(),
+                })),
+              }
+            : current,
+      )
+
+      queryClient.setQueriesData<NotificationInboxSummary>(
+        { queryKey: ['notifications', 'unread'] },
+        (current) =>
+          current
+            ? {
+                ...current,
+                unreadCount: 0,
+                previewItems: current.previewItems.map((item) => ({
+                  ...item,
+                  isRead: true,
+                  readAtUtc: item.readAtUtc ?? new Date().toISOString(),
+                })),
+              }
+            : current,
+      )
+    },
     onSuccess: () => {
       toast.success('All notifications marked as read')
       invalidate(queryClient)
     },
-    onError: (error) => toast.error(getErrorMessage(error)),
+    onError: (error) => toast.error(getApiErrorMessage(error, 'Unable to mark all notifications as read')),
   })
 }
 
@@ -54,10 +154,32 @@ export function useUpdateNotificationPreferences() {
 
   return useMutation({
     mutationFn: (input: Omit<NotificationPreferences, 'telegramLinked'>) => notificationsApi.updatePreferences(input),
-    onSuccess: () => {
+    onMutate: async (input) => {
+      await queryClient.cancelQueries({ queryKey: queryKeys.notifications.preferences() })
+      const previous = queryClient.getQueryData<NotificationPreferences>(queryKeys.notifications.preferences())
+
+      queryClient.setQueryData<NotificationPreferences | undefined>(queryKeys.notifications.preferences(), (current) =>
+        current
+          ? {
+              ...current,
+              ...input,
+            }
+          : current,
+      )
+
+      return { previous }
+    },
+    onSuccess: (nextPreferences) => {
       toast.success('Notification preferences updated')
+      queryClient.setQueryData(queryKeys.notifications.preferences(), nextPreferences)
       invalidate(queryClient)
     },
-    onError: (error) => toast.error(getErrorMessage(error)),
+    onError: (error, _input, context) => {
+      if (context?.previous) {
+        queryClient.setQueryData(queryKeys.notifications.preferences(), context.previous)
+      }
+
+      toast.error(getApiErrorMessage(error, 'Unable to update notification preferences'))
+    },
   })
 }

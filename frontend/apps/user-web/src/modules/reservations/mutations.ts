@@ -2,7 +2,9 @@
 
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
-import { ApiError } from '@pharmago/api-client'
+import type { Reservation } from '@pharmago/types'
+import { getApiErrorMessage } from '../../lib/errors'
+import { queryKeys } from '../../lib/query-keys'
 import { browserApi } from '../../lib/api'
 
 export function useCreateReservation() {
@@ -20,12 +22,15 @@ export function useCreateReservation() {
     },
     onSuccess: (reservation) => {
       toast.success(`Reservation ${reservation.reservationNumber} created`)
-      queryClient.invalidateQueries({ queryKey: ['reservations'] })
-      queryClient.invalidateQueries({ queryKey: ['notifications', 'unread'] })
+      queryClient.setQueryData<Reservation[]>(queryKeys.reservations.mine(), (current) =>
+        current ? [reservation, ...current] : [reservation],
+      )
+      queryClient.setQueryData(queryKeys.reservations.detail(reservation.reservationId), reservation)
+      queryClient.invalidateQueries({ queryKey: queryKeys.reservations.all() })
+      queryClient.invalidateQueries({ queryKey: queryKeys.notifications.all() })
     },
     onError: (error) => {
-      const message = error instanceof ApiError ? error.details?.detail || error.message : 'Unable to create reservation'
-      toast.error(message)
+      toast.error(getApiErrorMessage(error, 'Unable to create reservation'))
     },
   })
 }

@@ -2,7 +2,7 @@
 
 import { useQuery } from '@tanstack/react-query'
 import { pharmaciesApi } from './api'
-import type { PharmacySearchFilters } from './types'
+import type { PharmacySearchFilters, PharmacySuggestion } from './types'
 
 export function usePharmaciesSearch(filters: PharmacySearchFilters) {
   return useQuery({
@@ -15,6 +15,15 @@ export function usePharmaciesSearch(filters: PharmacySearchFilters) {
         page: filters.page,
         pageSize: filters.pageSize,
       }),
+  })
+}
+
+export function usePharmacySuggestions(query: string) {
+  return useQuery({
+    queryKey: ['pharmacies', 'suggestions', query],
+    queryFn: () => pharmaciesApi.suggestions(query) as Promise<PharmacySuggestion[]>,
+    enabled: query.trim().length >= 2,
+    staleTime: 60_000,
   })
 }
 

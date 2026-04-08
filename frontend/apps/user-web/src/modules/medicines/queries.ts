@@ -2,12 +2,30 @@
 
 import { useQuery } from '@tanstack/react-query'
 import { browserApi } from '../../lib/api'
+import type { MedicineSuggestion } from './types'
 
 export function useMedicinesSearch(query: string) {
   return useQuery({
     queryKey: ['medicines', 'search', query],
     queryFn: () => browserApi.medicines.search(query),
     enabled: query.trim().length >= 2,
+  })
+}
+
+export function useMedicineSuggestions(query: string) {
+  return useQuery({
+    queryKey: ['medicines', 'suggestions', query],
+    queryFn: () => browserApi.medicines.suggestions(query) as Promise<MedicineSuggestion[]>,
+    enabled: query.trim().length >= 2,
+    staleTime: 60_000,
+  })
+}
+
+export function usePopularMedicines(limit = 8) {
+  return useQuery({
+    queryKey: ['medicines', 'popular', limit],
+    queryFn: () => browserApi.medicines.popular(limit),
+    staleTime: 60_000,
   })
 }
 
@@ -26,4 +44,3 @@ export function useMedicineAvailability(medicineId?: string) {
     enabled: Boolean(medicineId),
   })
 }
-

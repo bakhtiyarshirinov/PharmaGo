@@ -30,6 +30,7 @@ public class ReservationNotificationService(
         {
             ReservationStatus.Confirmed when previousStatus != ReservationStatus.Confirmed => NotificationEventType.ReservationConfirmed,
             ReservationStatus.ReadyForPickup => NotificationEventType.ReservationReadyForPickup,
+            ReservationStatus.Completed => NotificationEventType.ReservationCompleted,
             ReservationStatus.Cancelled => NotificationEventType.ReservationCancelled,
             ReservationStatus.Expired => NotificationEventType.ReservationExpired,
             _ => (NotificationEventType?)null
@@ -256,6 +257,7 @@ public class ReservationNotificationService(
         {
             NotificationEventType.ReservationConfirmed => preference.ReservationConfirmedEnabled,
             NotificationEventType.ReservationReadyForPickup => preference.ReservationReadyEnabled,
+            NotificationEventType.ReservationCompleted => true,
             NotificationEventType.ReservationCancelled => preference.ReservationCancelledEnabled,
             NotificationEventType.ReservationExpired => preference.ReservationExpiredEnabled,
             NotificationEventType.ReservationExpiringSoon => preference.ReservationExpiringSoonEnabled,
@@ -273,6 +275,9 @@ public class ReservationNotificationService(
             NotificationEventType.ReservationReadyForPickup => (
                 "Reservation ready for pickup",
                 $"Reservation {reservation.ReservationNumber} is ready for pickup at {reservation.Pharmacy?.Name ?? "the selected pharmacy"}."),
+            NotificationEventType.ReservationCompleted => (
+                "Reservation completed",
+                $"Reservation {reservation.ReservationNumber} has been picked up successfully."),
             NotificationEventType.ReservationCancelled => (
                 "Reservation cancelled",
                 $"Reservation {reservation.ReservationNumber} has been cancelled."),

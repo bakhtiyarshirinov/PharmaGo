@@ -6,5 +6,6 @@ public enum NotificationEventType
     ReservationReadyForPickup = 2,
     ReservationCancelled = 3,
     ReservationExpired = 4,
-    ReservationExpiringSoon = 5
+    ReservationExpiringSoon = 5,
+    ReservationCompleted = 6
 }

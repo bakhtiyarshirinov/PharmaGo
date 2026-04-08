@@ -156,7 +156,9 @@ public static class PharmacistSmokeBootstrapSeeder
         pharmacy.OpeningHoursJson = """
         {"timeZone":"Asia/Baku","weekly":[{"day":"Mon","open":"08:00","close":"22:00"},{"day":"Tue","open":"08:00","close":"22:00"},{"day":"Wed","open":"08:00","close":"22:00"},{"day":"Thu","open":"08:00","close":"22:00"},{"day":"Fri","open":"08:00","close":"22:00"},{"day":"Sat","open":"09:00","close":"21:00"},{"day":"Sun","open":"09:00","close":"21:00"}]}
         """;
-        pharmacy.IsOpen24Hours = false;
+        // Smoke pharmacy stays available around the clock so the full reservation
+        // lifecycle can be exercised deterministically at any hour.
+        pharmacy.IsOpen24Hours = true;
         pharmacy.SupportsReservations = true;
         pharmacy.HasDelivery = false;
         pharmacy.IsActive = true;

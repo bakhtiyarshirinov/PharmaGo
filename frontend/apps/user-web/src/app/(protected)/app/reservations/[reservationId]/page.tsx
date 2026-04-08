@@ -15,7 +15,19 @@ export default function ReservationDetailPage() {
   const timeline = useReservationTimeline(params.reservationId)
   const cancelReservation = useCancelReservation()
 
-  if (!reservation.data) {
+  if (reservation.isLoading) {
+    return (
+      <div className="space-y-8">
+        <div className="h-36 animate-pulse rounded-[2rem] bg-slate-100" />
+        <div className="grid gap-6 xl:grid-cols-[1.1fr,0.9fr]">
+          <div className="h-80 animate-pulse rounded-[2rem] bg-slate-100" />
+          <div className="h-80 animate-pulse rounded-[2rem] bg-slate-100" />
+        </div>
+      </div>
+    )
+  }
+
+  if (reservation.isError || !reservation.data) {
     return <EmptyState title="Reservation not found" description="The requested reservation could not be loaded." />
   }
 
@@ -93,7 +105,22 @@ export default function ReservationDetailPage() {
           </Card>
         </div>
 
-        <ReservationTimeline events={timeline.data ?? []} />
+        {timeline.isLoading ? (
+          <Card>
+            <CardHeader>
+              <CardTitle>Reservation timeline</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              {Array.from({ length: 4 }).map((_, index) => (
+                <div key={index} className="h-24 animate-pulse rounded-2xl bg-slate-100" />
+              ))}
+            </CardContent>
+          </Card>
+        ) : timeline.isError ? (
+          <EmptyState title="Timeline unavailable" description="Reservation events could not be loaded right now." />
+        ) : (
+          <ReservationTimeline events={timeline.data ?? []} />
+        )}
       </div>
     </div>
   )

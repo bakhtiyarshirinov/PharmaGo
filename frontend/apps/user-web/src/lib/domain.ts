@@ -53,6 +53,8 @@ export function getNotificationEventLabel(eventType: NotificationHistoryItem['ev
       return 'Reservation expired'
     case 5:
       return 'Reservation expiring soon'
+    case 6:
+      return 'Reservation completed'
     default:
       return 'Reservation update'
   }

@@ -79,6 +79,68 @@ public class ReservationNotificationsTests(CustomWebApplicationFactory factory) 
     }
 
     [Fact]
+    public async Task Completed_ShouldWriteDeliveryLog_ForCustomer()
+    {
+        using var scope = factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+        var pharmacy = await db.Pharmacies.FirstAsync(x => x.Name == "PharmaGo Central");
+        pharmacy.IsOpen24Hours = true;
+        await db.SaveChangesAsync();
+
+        var stockItem = await db.StockItems.FirstAsync(x => x.PharmacyId == pharmacy.Id && x.Quantity >= 1);
+
+        var userAuth = await RegisterAndAuthorizeAsync(_client, "+994551110205", "notify-completed@example.com");
+        Assert.NotNull(userAuth);
+
+        var createResponse = await _client.PostAsJsonAsync("/api/reservations", new CreateReservationRequest
+        {
+            PharmacyId = pharmacy.Id,
+            ReserveForHours = 2,
+            Items =
+            [
+                new CreateReservationItemRequest
+                {
+                    MedicineId = stockItem.MedicineId,
+                    Quantity = 1
+                }
+            ]
+        });
+
+        var reservation = await createResponse.Content.ReadAsAsync<ReservationResponse>();
+        Assert.NotNull(reservation);
+
+        var pharmacistClient = factory.CreateClient();
+        var pharmacistLogin = await pharmacistClient.PostAsJsonAsync("/api/auth/login", new LoginRequest
+        {
+            PhoneNumber = "+994500000001",
+            Password = "Pharmacist123!"
+        });
+
+        var pharmacistAuth = await pharmacistLogin.Content.ReadAsAsync<AuthResponse>();
+        Assert.NotNull(pharmacistAuth);
+        pharmacistClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", pharmacistAuth!.AccessToken);
+
+        var confirmResponse = await pharmacistClient.PostAsync($"/api/reservations/{reservation!.ReservationId}/confirm", null);
+        Assert.Equal(HttpStatusCode.OK, confirmResponse.StatusCode);
+
+        var readyResponse = await pharmacistClient.PostAsync($"/api/reservations/{reservation.ReservationId}/ready-for-pickup", null);
+        Assert.Equal(HttpStatusCode.OK, readyResponse.StatusCode);
+
+        var completeResponse = await pharmacistClient.PostAsync($"/api/reservations/{reservation.ReservationId}/complete", null);
+        Assert.Equal(HttpStatusCode.OK, completeResponse.StatusCode);
+
+        var completedLog = await db.NotificationDeliveryLogs
+            .AsNoTracking()
+            .Where(x => x.ReservationId == reservation.ReservationId && x.EventType == NotificationEventType.ReservationCompleted)
+            .OrderByDescending(x => x.CreatedAtUtc)
+            .FirstOrDefaultAsync();
+
+        Assert.NotNull(completedLog);
+        Assert.Equal(NotificationDeliveryStatus.Sent, completedLog!.Status);
+        Assert.Equal(NotificationChannel.InApp, completedLog.Channel);
+    }
+
+    [Fact]
     public async Task ExpiringSoonDispatch_ShouldHonorPreferences_AndSendReminderStages()
     {
         using var scope = factory.Services.CreateScope();

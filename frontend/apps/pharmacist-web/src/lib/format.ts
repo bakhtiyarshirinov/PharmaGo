@@ -78,6 +78,8 @@ export function getNotificationEventLabel(eventType: number) {
       return 'Резерв истек'
     case 5:
       return 'Скоро истечет'
+    case 6:
+      return 'Резерв выдан'
     default:
       return 'Служебное уведомление'
   }

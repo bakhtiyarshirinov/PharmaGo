@@ -21,10 +21,10 @@ function MetricCard({
   tone?: 'neutral' | 'success' | 'warning' | 'danger' | 'info'
 }) {
   return (
-    <Card className="border-0 shadow-lg shadow-slate-950/5">
-      <CardHeader className="space-y-3">
+    <Card className="ops-glass overflow-hidden rounded-[2rem] border-0 bg-white/[0.98] text-slate-950 shadow-lg shadow-slate-950/10">
+      <CardHeader className="space-y-3 pb-3">
         <StatusBadge tone={tone}>{title}</StatusBadge>
-        <CardTitle className="text-3xl">{value}</CardTitle>
+        <CardTitle className="ops-display text-4xl">{value}</CardTitle>
       </CardHeader>
       <CardContent>
         <p className="text-sm text-slate-500">{hint}</p>
@@ -94,7 +94,7 @@ export function CockpitScreen({ initialSession = null }: CockpitScreenProps) {
   }
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-8 text-white">
       <PageHeader
         eyebrow="Сменный кокпит"
         title="Сначала очередь, потом склад, затем уведомления."
@@ -146,7 +146,7 @@ export function CockpitScreen({ initialSession = null }: CockpitScreenProps) {
       )}
 
       <div className="grid gap-6 xl:grid-cols-[1.15fr,0.85fr]">
-        <Card>
+        <Card className="ops-glass rounded-[2rem] border-white/10 bg-white/[0.97] text-slate-950">
           <CardHeader className="flex flex-row items-start justify-between gap-4">
             <div className="space-y-1">
               <CardTitle>Последние резервы</CardTitle>
@@ -206,7 +206,7 @@ export function CockpitScreen({ initialSession = null }: CockpitScreenProps) {
             <CardContent className="space-y-3">
               {unreadNotifications.data?.previewItems?.length ? (
                 unreadNotifications.data.previewItems.slice(0, 3).map((item) => (
-                  <div key={item.notificationId} className="rounded-3xl bg-slate-50 p-4">
+                  <div key={item.notificationId} className="rounded-3xl bg-slate-50/90 p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.8)]">
                     <p className="font-medium text-slate-950">{item.title}</p>
                     <p className="mt-1 text-sm text-slate-500">{item.message}</p>
                   </div>
@@ -217,7 +217,7 @@ export function CockpitScreen({ initialSession = null }: CockpitScreenProps) {
             </CardContent>
           </Card>
 
-          <Card>
+          <Card className="ops-glass rounded-[2rem] border-white/10 bg-white/[0.97] text-slate-950">
             <CardHeader className="flex flex-row items-start justify-between gap-4">
               <div className="space-y-1">
                 <CardTitle>Снимок складского давления</CardTitle>
@@ -228,19 +228,19 @@ export function CockpitScreen({ initialSession = null }: CockpitScreenProps) {
               </Button>
             </CardHeader>
             <CardContent className="space-y-3">
-              <div className="rounded-3xl bg-slate-50 p-4">
+              <div className="rounded-3xl bg-slate-50/90 p-4">
                 <p className="text-sm text-slate-500">Low stock</p>
                 <p className="mt-1 text-2xl font-semibold text-slate-950">{formatNumber(lowStock.data?.length ?? 0)}</p>
               </div>
-              <div className="rounded-3xl bg-slate-50 p-4">
+              <div className="rounded-3xl bg-slate-50/90 p-4">
                 <p className="text-sm text-slate-500">Out of stock</p>
                 <p className="mt-1 text-2xl font-semibold text-slate-950">{formatNumber(outOfStock.data?.length ?? 0)}</p>
               </div>
-              <div className="rounded-3xl bg-slate-50 p-4">
+              <div className="rounded-3xl bg-slate-50/90 p-4">
                 <p className="text-sm text-slate-500">Скоро истекают</p>
                 <p className="mt-1 text-2xl font-semibold text-slate-950">{formatNumber(expiring.data?.length ?? 0)}</p>
               </div>
-              <div className="rounded-3xl bg-slate-50 p-4">
+              <div className="rounded-3xl bg-slate-50/90 p-4">
                 <p className="text-sm text-slate-500">Restock suggestions</p>
                 <p className="mt-1 text-2xl font-semibold text-slate-950">{formatNumber(restock.data?.length ?? 0)}</p>
               </div>

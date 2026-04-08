@@ -48,7 +48,7 @@ export default function ReservationDetailPage() {
 
       <div className="grid gap-6 xl:grid-cols-[1.1fr,0.9fr]">
         <div className="space-y-6">
-          <Card>
+          <Card className="consumer-glass border-white/70">
             <CardHeader className="flex flex-row items-start justify-between gap-4">
               <div className="space-y-1">
                 <CardTitle>Reservation summary</CardTitle>
@@ -66,19 +66,19 @@ export default function ReservationDetailPage() {
               ) : null}
             </CardHeader>
             <CardContent className="grid gap-4 md:grid-cols-2">
-              <div className="rounded-2xl bg-slate-50 p-4">
+              <div className="rounded-[1.75rem] border border-white/70 bg-white/75 p-4 shadow-[0_18px_50px_rgba(148,163,184,0.14)]">
                 <p className="text-xs uppercase tracking-wide text-slate-400">Reserved until</p>
                 <p className="mt-1 text-sm font-medium text-slate-950">{formatDateTime(reservation.data.reservedUntilUtc)}</p>
               </div>
-              <div className="rounded-2xl bg-slate-50 p-4">
+              <div className="rounded-[1.75rem] border border-white/70 bg-white/75 p-4 shadow-[0_18px_50px_rgba(148,163,184,0.14)]">
                 <p className="text-xs uppercase tracking-wide text-slate-400">Pickup available from</p>
                 <p className="mt-1 text-sm font-medium text-slate-950">{formatDateTime(reservation.data.pickupAvailableFromUtc)}</p>
               </div>
-              <div className="rounded-2xl bg-slate-50 p-4">
+              <div className="rounded-[1.75rem] border border-white/70 bg-white/75 p-4 shadow-[0_18px_50px_rgba(148,163,184,0.14)]">
                 <p className="text-xs uppercase tracking-wide text-slate-400">Total amount</p>
                 <p className="mt-1 text-sm font-medium text-slate-950">{formatMoney(reservation.data.totalAmount)}</p>
               </div>
-              <div className="rounded-2xl bg-slate-50 p-4">
+              <div className="rounded-[1.75rem] border border-white/70 bg-white/75 p-4 shadow-[0_18px_50px_rgba(148,163,184,0.14)]">
                 <p className="text-xs uppercase tracking-wide text-slate-400">Pharmacy</p>
                 <Button asChild variant="ghost" size="sm" className="mt-1 h-auto px-0 text-sm font-medium">
                   <Link href={`/pharmacies/${reservation.data.pharmacyId}`}>{reservation.data.pharmacyName}</Link>
@@ -87,13 +87,16 @@ export default function ReservationDetailPage() {
             </CardContent>
           </Card>
 
-          <Card>
+          <Card className="consumer-glass border-white/70">
             <CardHeader>
               <CardTitle>Reserved items</CardTitle>
             </CardHeader>
             <CardContent className="space-y-3">
               {reservation.data.items.map((item) => (
-                <div key={`${item.medicineId}-${item.medicineName}`} className="flex items-center justify-between rounded-2xl border border-slate-200 p-4">
+                <div
+                  key={`${item.medicineId}-${item.medicineName}`}
+                  className="flex items-center justify-between rounded-[1.75rem] border border-white/70 bg-white/80 p-4 shadow-[0_18px_50px_rgba(148,163,184,0.12)]"
+                >
                   <div>
                     <p className="font-medium text-slate-950">{item.medicineName}</p>
                     <p className="text-sm text-slate-500">{item.quantity} units reserved</p>
@@ -106,7 +109,7 @@ export default function ReservationDetailPage() {
         </div>
 
         {timeline.isLoading ? (
-          <Card>
+          <Card className="consumer-glass border-white/70">
             <CardHeader>
               <CardTitle>Reservation timeline</CardTitle>
             </CardHeader>

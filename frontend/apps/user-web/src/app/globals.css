@@ -2,18 +2,101 @@
 @tailwind components;
 @tailwind utilities;
 
+@import url('https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600;9..144,700&family=Manrope:wght@400;500;600;700;800&display=swap');
+
 :root {
   color-scheme: light;
+  --consumer-bg: #f6efe4;
+  --consumer-surface: rgba(255, 252, 246, 0.82);
+  --consumer-stroke: rgba(148, 113, 84, 0.14);
+  --consumer-ink: #172033;
+  --consumer-soft-ink: #5d6678;
+  --consumer-accent: #d3643b;
+  --consumer-accent-2: #0d8f73;
+}
+
+html {
+  scroll-behavior: smooth;
 }
 
 body {
-  @apply bg-stone-50 text-slate-950 antialiased;
+  @apply min-h-screen antialiased;
+  color: var(--consumer-ink);
+  font-family: 'Manrope', ui-sans-serif, system-ui, sans-serif;
+  background-color: var(--consumer-bg);
   background-image:
-    radial-gradient(circle at top left, rgba(249, 115, 22, 0.14), transparent 28%),
-    radial-gradient(circle at top right, rgba(16, 185, 129, 0.16), transparent 24%);
+    radial-gradient(circle at top left, rgba(211, 100, 59, 0.22), transparent 28%),
+    radial-gradient(circle at 85% 12%, rgba(13, 143, 115, 0.16), transparent 22%),
+    linear-gradient(180deg, rgba(255, 250, 245, 0.94), rgba(246, 239, 228, 0.98));
+}
+
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  background-image:
+    linear-gradient(rgba(255, 255, 255, 0.22) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.18) 1px, transparent 1px);
+  background-size: 32px 32px;
+  mask-image: linear-gradient(180deg, rgba(0, 0, 0, 0.45), transparent 78%);
+  opacity: 0.45;
+}
+
+main,
+header {
+  position: relative;
+  z-index: 1;
 }
 
 a {
   @apply text-inherit no-underline;
 }
 
+::selection {
+  background: rgba(211, 100, 59, 0.18);
+}
+
+.consumer-display {
+  font-family: 'Fraunces', ui-serif, Georgia, serif;
+  letter-spacing: -0.03em;
+}
+
+.consumer-shell {
+  position: relative;
+}
+
+.consumer-shell::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background:
+    radial-gradient(circle at 10% 12%, rgba(255, 255, 255, 0.5), transparent 26%),
+    radial-gradient(circle at 92% 30%, rgba(255, 255, 255, 0.28), transparent 18%);
+}
+
+.consumer-glass {
+  background: var(--consumer-surface);
+  border: 1px solid var(--consumer-stroke);
+  box-shadow:
+    0 24px 70px -40px rgba(61, 36, 19, 0.28),
+    inset 0 1px 0 rgba(255, 255, 255, 0.55);
+  backdrop-filter: blur(18px);
+}
+
+.soft-enter {
+  animation: soft-enter 560ms cubic-bezier(0.2, 1, 0.2, 1) both;
+}
+
+@keyframes soft-enter {
+  from {
+    opacity: 0;
+    transform: translateY(18px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}

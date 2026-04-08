@@ -94,7 +94,7 @@ export function ReservationQueueScreen({ initialSession = null }: ReservationQue
   }
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-8 text-white">
       <PageHeader
         eyebrow="Очередь резервов"
         title="Подтверждение и выдача без лишних переходов."
@@ -102,7 +102,7 @@ export function ReservationQueueScreen({ initialSession = null }: ReservationQue
         actions={<StatusBadge tone="info">{filteredReservations.length} в текущем фильтре</StatusBadge>}
       />
 
-      <Card>
+      <Card className="ops-glass rounded-[2rem] border-white/10 bg-white/[0.98] text-slate-950 shadow-2xl shadow-slate-950/10">
         <CardHeader className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
           <div className="space-y-1">
             <CardTitle>Фильтр очереди</CardTitle>
@@ -123,6 +123,7 @@ export function ReservationQueueScreen({ initialSession = null }: ReservationQue
                 key={key}
                 variant={filter === key ? 'primary' : 'outline'}
                 size="sm"
+                className={filter === key ? 'rounded-full' : 'rounded-full border-slate-200 bg-white'}
                 onClick={() => setFilter(key)}
               >
                 {filterLabels[key]}
@@ -164,8 +165,8 @@ export function ReservationQueueScreen({ initialSession = null }: ReservationQue
                     const statusMeta = getReservationStatusMeta(reservation.status)
 
                     return (
-                      <tr key={reservation.reservationId} className="rounded-3xl bg-slate-50 align-top">
-                        <td className="rounded-l-3xl px-4 py-4">
+                      <tr key={reservation.reservationId} className="align-top">
+                        <td className="rounded-l-[1.75rem] bg-slate-50 px-4 py-4 shadow-[0_18px_40px_-34px_rgba(15,23,42,0.4)]">
                           <div className="space-y-1">
                             <Link
                               href={`/reservations/${reservation.reservationId}`}
@@ -176,13 +177,13 @@ export function ReservationQueueScreen({ initialSession = null }: ReservationQue
                             <p className="text-xs text-slate-500">{formatDateTime(reservation.createdAtUtc)}</p>
                           </div>
                         </td>
-                        <td className="px-4 py-4">
+                        <td className="bg-slate-50 px-4 py-4">
                           <div className="space-y-1">
                             <p className="font-medium text-slate-900">{reservation.customerFullName}</p>
                             <p className="text-xs text-slate-500">{reservation.phoneNumber}</p>
                           </div>
                         </td>
-                        <td className="px-4 py-4">
+                        <td className="bg-slate-50 px-4 py-4">
                           <div className="space-y-1">
                             {reservation.items.slice(0, 2).map((item) => (
                               <p key={`${reservation.reservationId}-${item.medicineId}`} className="text-slate-700">
@@ -194,17 +195,17 @@ export function ReservationQueueScreen({ initialSession = null }: ReservationQue
                             ) : null}
                           </div>
                         </td>
-                        <td className="px-4 py-4">
+                        <td className="bg-slate-50 px-4 py-4">
                           <div className="space-y-1">
                             <p className="font-medium text-slate-900">{formatDateTime(reservation.reservedUntilUtc)}</p>
                             <p className="text-xs text-slate-500">{getReservationCountdown(reservation)}</p>
                           </div>
                         </td>
-                        <td className="px-4 py-4 font-medium text-slate-900">{formatMoney(reservation.totalAmount)}</td>
-                        <td className="px-4 py-4">
+                        <td className="bg-slate-50 px-4 py-4 font-medium text-slate-900">{formatMoney(reservation.totalAmount)}</td>
+                        <td className="bg-slate-50 px-4 py-4">
                           <StatusBadge tone={statusMeta.tone}>{statusMeta.label}</StatusBadge>
                         </td>
-                        <td className="rounded-r-3xl px-4 py-4">
+                        <td className="rounded-r-[1.75rem] bg-slate-50 px-4 py-4">
                           <div className="space-y-3">
                             <ReservationActionButtons reservation={reservation} compact />
                             <Button asChild variant="outline" size="sm">

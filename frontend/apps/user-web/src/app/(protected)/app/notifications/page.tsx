@@ -51,7 +51,7 @@ export default function NotificationsPage() {
 
       <div className="grid gap-6 xl:grid-cols-[1.2fr,0.8fr]">
         <div className="space-y-6">
-          <Card>
+          <Card className="consumer-glass border-white/70">
             <CardHeader className="flex flex-row items-start justify-between gap-4">
               <div className="space-y-1">
                 <CardTitle>Inbox</CardTitle>
@@ -87,7 +87,7 @@ export default function NotificationsPage() {
                     />
                   ))}
 
-                  <div className="flex items-center justify-between rounded-2xl border border-slate-200 bg-white px-4 py-3">
+                  <div className="flex items-center justify-between rounded-[1.75rem] border border-white/70 bg-white/80 px-4 py-3 shadow-[0_18px_50px_rgba(148,163,184,0.12)]">
                     <p className="text-sm text-slate-500">
                       Page {history.data.page} of {history.data.totalPages}
                     </p>
@@ -127,14 +127,17 @@ export default function NotificationsPage() {
         </div>
 
         <div className="space-y-6">
-          <Card>
+          <Card className="consumer-glass border-white/70">
             <CardHeader>
               <CardTitle>Unread preview</CardTitle>
             </CardHeader>
             <CardContent className="space-y-3">
               {unread.data?.previewItems?.length ? (
                 unread.data.previewItems.map((notification) => (
-                  <div key={notification.notificationId} className="rounded-2xl bg-slate-50 p-4">
+                  <div
+                    key={notification.notificationId}
+                    className="rounded-[1.75rem] border border-white/70 bg-white/80 p-4 shadow-[0_18px_50px_rgba(148,163,184,0.12)]"
+                  >
                     <p className="text-sm font-medium text-slate-950">{notification.title}</p>
                     <p className="mt-1 text-sm text-slate-500">{notification.message}</p>
                   </div>

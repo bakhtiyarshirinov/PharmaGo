@@ -85,7 +85,7 @@ export function ReservationDetailScreen({ reservationId, initialSession = null }
 
       <div className="grid gap-6 xl:grid-cols-[1.1fr,0.9fr]">
         <div className="space-y-6">
-          <Card>
+          <Card className="ops-glass border-white/10 bg-white/95">
             <CardHeader className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
               <div className="space-y-1">
                 <CardTitle>Операции по резерву</CardTitle>
@@ -97,27 +97,27 @@ export function ReservationDetailScreen({ reservationId, initialSession = null }
             </CardHeader>
             <CardContent className="space-y-4">
               {completeGuard && !canCompleteReservation(reservation.data) ? (
-                <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-700">
+                <div className="rounded-[1.5rem] border border-amber-200 bg-amber-50/90 px-4 py-3 text-sm text-amber-700">
                   {completeGuard}
                 </div>
               ) : null}
 
               <div className="grid gap-4 md:grid-cols-2">
-                <div className="rounded-3xl bg-slate-50 p-4">
+                <div className="rounded-[1.75rem] border border-slate-200/80 bg-white/85 p-4 shadow-[0_22px_60px_rgba(15,23,42,0.08)]">
                   <p className="text-xs uppercase tracking-[0.18em] text-slate-400">Создан</p>
                   <p className="mt-2 text-sm font-medium text-slate-950">{formatDateTime(reservation.data.createdAtUtc)}</p>
                 </div>
-                <div className="rounded-3xl bg-slate-50 p-4">
+                <div className="rounded-[1.75rem] border border-slate-200/80 bg-white/85 p-4 shadow-[0_22px_60px_rgba(15,23,42,0.08)]">
                   <p className="text-xs uppercase tracking-[0.18em] text-slate-400">Истекает</p>
                   <p className="mt-2 text-sm font-medium text-slate-950">{formatDateTime(reservation.data.reservedUntilUtc)}</p>
                 </div>
-                <div className="rounded-3xl bg-slate-50 p-4">
+                <div className="rounded-[1.75rem] border border-slate-200/80 bg-white/85 p-4 shadow-[0_22px_60px_rgba(15,23,42,0.08)]">
                   <p className="text-xs uppercase tracking-[0.18em] text-slate-400">Выдача доступна</p>
                   <p className="mt-2 text-sm font-medium text-slate-950">
                     {formatDateTime(reservation.data.pickupAvailableFromUtc ?? reservation.data.createdAtUtc)}
                   </p>
                 </div>
-                <div className="rounded-3xl bg-slate-50 p-4">
+                <div className="rounded-[1.75rem] border border-slate-200/80 bg-white/85 p-4 shadow-[0_22px_60px_rgba(15,23,42,0.08)]">
                   <p className="text-xs uppercase tracking-[0.18em] text-slate-400">Сумма</p>
                   <p className="mt-2 text-sm font-medium text-slate-950">{formatMoney(reservation.data.totalAmount)}</p>
                 </div>
@@ -125,7 +125,7 @@ export function ReservationDetailScreen({ reservationId, initialSession = null }
             </CardContent>
           </Card>
 
-          <Card>
+          <Card className="ops-glass border-white/10 bg-white/95">
             <CardHeader>
               <CardTitle>Состав заказа</CardTitle>
             </CardHeader>
@@ -133,7 +133,7 @@ export function ReservationDetailScreen({ reservationId, initialSession = null }
               {reservation.data.items.map((item) => (
                 <div
                   key={`${reservation.data?.reservationId}-${item.medicineId}`}
-                  className="flex items-start justify-between rounded-3xl border border-slate-200 bg-white p-4"
+                  className="flex items-start justify-between rounded-[1.75rem] border border-slate-200/80 bg-white/85 p-4 shadow-[0_22px_60px_rgba(15,23,42,0.08)]"
                 >
                   <div>
                     <p className="font-medium text-slate-950">{item.medicineName}</p>
@@ -150,29 +150,29 @@ export function ReservationDetailScreen({ reservationId, initialSession = null }
         </div>
 
         <div className="space-y-6">
-          <Card>
+          <Card className="ops-glass border-white/10 bg-white/95">
             <CardHeader>
               <CardTitle>Контекст клиента</CardTitle>
             </CardHeader>
             <CardContent className="space-y-3 text-sm text-slate-600">
-              <div className="rounded-3xl bg-slate-50 p-4">
+              <div className="rounded-[1.75rem] border border-slate-200/80 bg-white/85 p-4 shadow-[0_22px_60px_rgba(15,23,42,0.08)]">
                 <p className="font-medium text-slate-950">{reservation.data.customerFullName}</p>
                 <p className="mt-1">{reservation.data.phoneNumber}</p>
               </div>
               {reservation.data.notes ? (
-                <div className="rounded-3xl bg-slate-50 p-4">
+                <div className="rounded-[1.75rem] border border-slate-200/80 bg-white/85 p-4 shadow-[0_22px_60px_rgba(15,23,42,0.08)]">
                   <p className="text-xs uppercase tracking-[0.18em] text-slate-400">Комментарий</p>
                   <p className="mt-2 text-slate-700">{reservation.data.notes}</p>
                 </div>
               ) : (
-                <div className="rounded-3xl border border-dashed border-slate-200 p-4 text-slate-500">
+                <div className="rounded-[1.75rem] border border-dashed border-slate-200 p-4 text-slate-500">
                   Клиент не оставлял комментарий к заказу.
                 </div>
               )}
             </CardContent>
           </Card>
 
-          <Card>
+          <Card className="ops-glass border-white/10 bg-white/95">
             <CardHeader>
               <CardTitle>Таймлайн</CardTitle>
             </CardHeader>
@@ -189,7 +189,10 @@ export function ReservationDetailScreen({ reservationId, initialSession = null }
                 </div>
               ) : timeline.data?.length ? (
                 timeline.data.map((event) => (
-                  <div key={`${event.action}-${event.occurredAtUtc}`} className="rounded-3xl bg-slate-50 p-4">
+                  <div
+                    key={`${event.action}-${event.occurredAtUtc}`}
+                    className="rounded-[1.75rem] border border-slate-200/80 bg-white/85 p-4 shadow-[0_22px_60px_rgba(15,23,42,0.08)]"
+                  >
                     <div className="flex items-start justify-between gap-4">
                       <div>
                         <p className="font-medium text-slate-950">{event.title}</p>

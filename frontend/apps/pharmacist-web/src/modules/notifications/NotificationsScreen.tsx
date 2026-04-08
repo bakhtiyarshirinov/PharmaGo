@@ -71,7 +71,7 @@ export function NotificationsScreen({ initialSession = null }: NotificationsScre
       />
 
       <div className="grid gap-6 xl:grid-cols-[1.15fr,0.85fr]">
-        <Card>
+        <Card className="ops-glass border-white/10 bg-white/95">
           <CardHeader className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
             <div className="space-y-1">
               <CardTitle>История и inbox</CardTitle>
@@ -106,7 +106,10 @@ export function NotificationsScreen({ initialSession = null }: NotificationsScre
                   const statusMeta = getNotificationStatusMeta(notification.status)
 
                   return (
-                    <div key={notification.notificationId} className="rounded-3xl border border-slate-200 bg-slate-50 p-4">
+                    <div
+                      key={notification.notificationId}
+                      className="rounded-[1.75rem] border border-slate-200/80 bg-white/85 p-4 shadow-[0_22px_60px_rgba(15,23,42,0.08)]"
+                    >
                       <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
                         <div className="space-y-2">
                           <div className="flex flex-wrap items-center gap-2">
@@ -141,7 +144,7 @@ export function NotificationsScreen({ initialSession = null }: NotificationsScre
                   )
                 })}
 
-                <div className="flex items-center justify-between rounded-3xl border border-slate-200 bg-white px-4 py-3">
+                <div className="flex items-center justify-between rounded-[1.75rem] border border-slate-200/80 bg-white/85 px-4 py-3 shadow-[0_22px_60px_rgba(15,23,42,0.08)]">
                   <p className="text-sm text-slate-500">
                     Страница {history.data.page} из {history.data.totalPages}
                   </p>
@@ -167,14 +170,17 @@ export function NotificationsScreen({ initialSession = null }: NotificationsScre
         </Card>
 
         <div className="space-y-6">
-          <Card>
+          <Card className="ops-glass border-white/10 bg-white/95">
             <CardHeader>
               <CardTitle>Unread summary</CardTitle>
             </CardHeader>
             <CardContent className="space-y-3">
               {unread.data?.previewItems?.length ? (
                 unread.data.previewItems.map((notification) => (
-                  <div key={notification.notificationId} className="rounded-3xl bg-slate-50 p-4">
+                  <div
+                    key={notification.notificationId}
+                    className="rounded-[1.75rem] border border-slate-200/80 bg-white/85 p-4 shadow-[0_22px_60px_rgba(15,23,42,0.08)]"
+                  >
                     <div className="flex items-center justify-between gap-3">
                       <p className="font-medium text-slate-950">{notification.title}</p>
                       <StatusBadge tone="info">{getNotificationChannelLabel(notification.channel)}</StatusBadge>
@@ -249,7 +255,7 @@ function NotificationPreferencesCard({
   }, [form, values])
 
   return (
-    <Card>
+    <Card className="ops-glass border-white/10 bg-white/95">
       <CardHeader>
         <CardTitle>Настройки доставки</CardTitle>
       </CardHeader>
@@ -318,7 +324,7 @@ function CheckboxField({
   registration: UseFormRegisterReturn
 }) {
   return (
-    <label className="flex items-start gap-3 rounded-3xl bg-slate-50 px-4 py-3 text-sm text-slate-700">
+    <label className="flex items-start gap-3 rounded-[1.5rem] border border-slate-200/80 bg-white/80 px-4 py-3 text-sm text-slate-700 shadow-[0_18px_50px_rgba(15,23,42,0.06)]">
       <input type="checkbox" className="mt-1 h-4 w-4 rounded border-slate-300" {...registration} />
       <span>
         <span className="font-medium text-slate-900">{label}</span>

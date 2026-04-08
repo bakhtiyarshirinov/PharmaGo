@@ -51,11 +51,11 @@ export function PharmacistLoginForm() {
   }
 
   return (
-    <Card className="max-w-lg border-0 bg-white/95 shadow-2xl shadow-slate-950/10">
+    <Card className="ops-glass max-w-lg rounded-[2rem] border-0 bg-white/[0.96] shadow-2xl shadow-slate-950/20">
       <CardHeader className="space-y-3">
         <StatusBadge tone="info">Только для сотрудников аптеки</StatusBadge>
-        <CardTitle>Вход в рабочую смену</CardTitle>
-        <CardDescription>
+        <CardTitle className="ops-display text-4xl text-slate-950">Вход в рабочую смену</CardTitle>
+        <CardDescription className="text-sm leading-6 text-slate-600">
           После входа откроется очередь резервов, уведомления и управление остатками по вашей аптеке.
         </CardDescription>
       </CardHeader>
@@ -98,7 +98,7 @@ export function PharmacistLoginForm() {
             </div>
           ) : null}
 
-          <Button className="w-full" type="submit" disabled={isSubmitting}>
+          <Button className="w-full rounded-full" type="submit" disabled={isSubmitting}>
             {isSubmitting ? 'Открываем рабочее место...' : 'Войти'}
           </Button>
         </form>

@@ -1,6 +1,7 @@
 import Link from 'next/link'
 import { readSessionMeta, requirePortalAccess } from '@pharmago/auth/server'
 import { StatusBadge } from '@pharmago/ui'
+import { RealtimeBridge } from '../../modules/realtime/RealtimeBridge'
 
 export default async function ProtectedLayout({ children }: { children: React.ReactNode }) {
   const session = await readSessionMeta()
@@ -10,6 +11,7 @@ export default async function ProtectedLayout({ children }: { children: React.Re
 
   return (
     <div className="min-h-screen bg-slate-950">
+      <RealtimeBridge />
       <aside className="border-b border-white/10 bg-slate-950/90 px-6 py-4 backdrop-blur">
         <div className="mx-auto flex max-w-7xl flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
           <div className="space-y-2">

@@ -17,7 +17,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
 
   return (
     <QueryClientProvider client={queryClient}>
-      <AuthProvider>
+      <AuthProvider portal="admin">
         {children}
         <Toaster richColors position="top-right" />
       </AuthProvider>

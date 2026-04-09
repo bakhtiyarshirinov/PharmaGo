@@ -20,7 +20,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
 
   return (
     <QueryClientProvider client={queryClient}>
-      <AuthProvider>
+      <AuthProvider portal="pharmacist">
         {children}
         <Toaster richColors position="top-right" />
       </AuthProvider>

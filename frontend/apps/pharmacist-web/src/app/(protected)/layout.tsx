@@ -4,7 +4,7 @@ import { StatusBadge } from '@pharmago/ui'
 import { RealtimeBridge } from '../../modules/realtime/RealtimeBridge'
 
 export default async function ProtectedLayout({ children }: { children: React.ReactNode }) {
-  const session = await readSessionMeta()
+  const session = await readSessionMeta('pharmacist')
   requirePortalAccess(session, 'pharmacist', '/login')
 
   const staffName = session ? `${session.user.firstName} ${session.user.lastName}` : 'PharmaGo Staff'

@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect } from 'react'
-import { HubConnectionBuilder, LogLevel } from '@microsoft/signalr'
+import { HubConnectionBuilder, HubConnectionState, LogLevel } from '@microsoft/signalr'
 import { useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import { useAuthStore } from '@pharmago/auth/client'
@@ -42,9 +42,12 @@ export function RealtimeBridge() {
       return
     }
 
+    let disposed = false
+    let failureCount = 0
+
     const connection = new HubConnectionBuilder()
       .withUrl(joinUrl(backendUrl, '/hubs/notifications'), {
-        accessTokenFactory: () => accessToken,
+        accessTokenFactory: () => useAuthStore.getState().session?.accessToken ?? '',
         withCredentials: false,
       })
       .withAutomaticReconnect([0, 2000, 5000, 10000])
@@ -100,11 +103,44 @@ export function RealtimeBridge() {
       })
     })
 
-    void connection.start().catch(() => {
-      toast.error('Не удалось подключить realtime-канал аптеки.')
+    connection.onreconnected(() => {
+      failureCount = 0
+      void Promise.all([
+        invalidateReservations(),
+        invalidateInventory(),
+        invalidateNotifications(),
+      ])
     })
 
+    const startConnection = async () => {
+      if (disposed || connection.state !== HubConnectionState.Disconnected) {
+        return
+      }
+
+      try {
+        await connection.start()
+        failureCount = 0
+      } catch {
+        failureCount += 1
+
+        if (disposed) {
+          return
+        }
+
+        if (failureCount >= 3) {
+          toast.error('Не удалось подключить realtime-канал аптеки.')
+        }
+
+        window.setTimeout(() => {
+          void startConnection()
+        }, Math.min(10_000, failureCount * 2_000))
+      }
+    }
+
+    void startConnection()
+
     return () => {
+      disposed = true
       connection.off('reservation.created')
       connection.off('reservation.status.changed')
       connection.off('stock.low')

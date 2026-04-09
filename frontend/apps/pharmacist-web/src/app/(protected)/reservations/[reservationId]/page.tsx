@@ -7,7 +7,7 @@ export default async function ReservationDetailPage({
   params: Promise<{ reservationId: string }>
 }) {
   const { reservationId } = await params
-  const session = await readSessionMeta()
+  const session = await readSessionMeta('pharmacist')
 
   return <ReservationDetailScreen reservationId={reservationId} initialSession={session} />
 }

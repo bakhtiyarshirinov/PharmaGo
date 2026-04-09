@@ -3,7 +3,7 @@ import { readSessionMeta, requirePortalAccess } from '@pharmago/auth/server'
 import { StatusBadge } from '@pharmago/ui'
 
 export default async function ProtectedLayout({ children }: { children: React.ReactNode }) {
-  const session = await readSessionMeta()
+  const session = await readSessionMeta('admin')
   requirePortalAccess(session, 'admin', '/login')
   const staffName = session ? `${session.user.firstName} ${session.user.lastName}` : 'Moderator'
 

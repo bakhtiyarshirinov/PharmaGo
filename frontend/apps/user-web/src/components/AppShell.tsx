@@ -2,6 +2,7 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
+import { useAuth } from '@pharmago/auth/client'
 import { userRoutes } from '@pharmago/config'
 import { Button } from '@pharmago/ui'
 
@@ -13,6 +14,7 @@ export function AppShell({
   actions?: React.ReactNode
 }) {
   const pathname = usePathname()
+  const auth = useAuth()
 
   const navItems = [
     { href: userRoutes.medicines, label: 'Medicines' },
@@ -59,9 +61,27 @@ export function AppShell({
           </div>
           <div className="flex items-center gap-3">
             {actions}
-            <Button asChild className="rounded-full" variant="outline">
-              <Link href={userRoutes.login}>Sign in</Link>
-            </Button>
+            {auth.session ? (
+              <>
+                <Button asChild className="rounded-full" variant="outline">
+                  <Link href={userRoutes.profile}>{auth.session.user.firstName}</Link>
+                </Button>
+                <Button
+                  className="rounded-full"
+                  variant="ghost"
+                  onClick={async () => {
+                    await auth.logout()
+                    window.location.href = userRoutes.login
+                  }}
+                >
+                  Logout
+                </Button>
+              </>
+            ) : (
+              <Button asChild className="rounded-full" variant="outline">
+                <Link href={userRoutes.login}>Sign in</Link>
+              </Button>
+            )}
           </div>
         </div>
       </header>

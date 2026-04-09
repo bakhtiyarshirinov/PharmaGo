@@ -3,7 +3,7 @@ import { AppShell } from '../../../components/AppShell'
 import { RealtimeBridge } from '../../../modules/realtime/RealtimeBridge'
 
 export default async function ProtectedLayout({ children }: { children: React.ReactNode }) {
-  const session = await readSessionMeta()
+  const session = await readSessionMeta('user')
   requirePortalAccess(session, 'user', '/auth/login')
 
   return (

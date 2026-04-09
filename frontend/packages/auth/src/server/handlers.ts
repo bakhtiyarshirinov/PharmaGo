@@ -36,7 +36,7 @@ async function guardPortalAccess(session: AuthSession, portal?: Portal) {
     return null
   }
 
-  await clearAuthCookies()
+  await clearAuthCookies(portal)
 
   return NextResponse.json(
     {
@@ -58,13 +58,14 @@ export async function loginHandler(request: Request, options: AuthHandlerOptions
     return portalError
   }
 
-  await writeAuthCookies(auth)
+  await writeAuthCookies(auth, options.portal ?? 'user')
 
   return NextResponse.json(session)
 }
 
-export async function logoutHandler() {
-  const refreshToken = await readRefreshToken()
+export async function logoutHandler(options: AuthHandlerOptions = {}) {
+  const portal = options.portal ?? 'user'
+  const refreshToken = await readRefreshToken(portal)
 
   if (refreshToken) {
     try {
@@ -74,12 +75,13 @@ export async function logoutHandler() {
     }
   }
 
-  await clearAuthCookies()
+  await clearAuthCookies(portal)
   return NextResponse.json({ ok: true })
 }
 
 export async function sessionHandler(options: AuthHandlerOptions = {}) {
-  const current = await readSessionMeta()
+  const portal = options.portal ?? 'user'
+  const current = await readSessionMeta(portal)
 
   if (current && new Date(current.expiresAtUtc).getTime() > Date.now() + 30_000) {
     const portalError = await guardPortalAccess(current, options.portal)
@@ -91,7 +93,7 @@ export async function sessionHandler(options: AuthHandlerOptions = {}) {
     return NextResponse.json(current)
   }
 
-  const refreshToken = await readRefreshToken()
+  const refreshToken = await readRefreshToken(portal)
   if (!refreshToken) {
     return NextResponse.json({ title: 'Unauthorized', status: 401 }, { status: 401 })
   }
@@ -105,10 +107,10 @@ export async function sessionHandler(options: AuthHandlerOptions = {}) {
       return portalError
     }
 
-    await writeAuthCookies(nextAuth)
+    await writeAuthCookies(nextAuth, portal)
     return NextResponse.json(nextSession)
   } catch {
-    await clearAuthCookies()
+    await clearAuthCookies(portal)
     return NextResponse.json({ title: 'Unauthorized', status: 401 }, { status: 401 })
   }
 }

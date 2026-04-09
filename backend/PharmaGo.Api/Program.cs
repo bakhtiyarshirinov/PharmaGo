@@ -22,6 +22,8 @@ var builder = WebApplication.CreateBuilder(args);
 const string FrontendCorsPolicy = "FrontendDev";
 var bootstrapPharmacistSmoke = args.Any(argument =>
     string.Equals(argument, "--bootstrap-pharmacist-smoke", StringComparison.OrdinalIgnoreCase));
+var bootstrapShowcaseData = args.Any(argument =>
+    string.Equals(argument, "--bootstrap-showcase-data", StringComparison.OrdinalIgnoreCase));
 
 builder.Services.AddInfrastructure(builder.Configuration);
 builder.Services.AddProblemDetails();
@@ -146,6 +148,45 @@ if (bootstrapPharmacistSmoke)
     Console.WriteLine($"Moderator password: {bootstrapResult.ModeratorPassword}");
     Console.WriteLine($"Pending reservation: {bootstrapResult.PendingReservationNumber}");
     Console.WriteLine($"Ready reservation: {bootstrapResult.ReadyReservationNumber}");
+
+    return;
+}
+
+if (bootstrapShowcaseData)
+{
+    using var scope = app.Services.CreateScope();
+    var context = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+    var bootstrapResult = await ShowcaseBootstrapSeeder.SeedAsync(context);
+
+    app.Logger.LogInformation(
+        "Showcase bootstrap completed with {PharmacyCount} pharmacies, {MedicineCount} medicines and {ReservationCount} reservations.",
+        bootstrapResult.Pharmacies.Count,
+        bootstrapResult.MedicineCount,
+        bootstrapResult.ReservationCount);
+
+    Console.WriteLine("Showcase bootstrap completed.");
+    Console.WriteLine($"Moderator phone: {bootstrapResult.ModeratorPhoneNumber}");
+    Console.WriteLine($"Moderator password: {bootstrapResult.ModeratorPassword}");
+    Console.WriteLine($"Pharmacies: {bootstrapResult.Pharmacies.Count}");
+    Console.WriteLine($"Medicines: {bootstrapResult.MedicineCount}");
+    Console.WriteLine($"Stock items: {bootstrapResult.StockItemCount}");
+    Console.WriteLine($"Reservations: {bootstrapResult.ReservationCount}");
+
+    foreach (var pharmacy in bootstrapResult.Pharmacies)
+    {
+        Console.WriteLine($"Pharmacy: {pharmacy.PharmacyName} ({pharmacy.City})");
+        Console.WriteLine($"  Pharmacy ID: {pharmacy.PharmacyId}");
+        Console.WriteLine($"  Pharmacist: {pharmacy.PharmacistName}");
+        Console.WriteLine($"  Login: {pharmacy.PharmacistPhoneNumber}");
+        Console.WriteLine($"  Password: {pharmacy.PharmacistPassword}");
+    }
+
+    foreach (var customer in bootstrapResult.Customers)
+    {
+        Console.WriteLine($"Customer: {customer.CustomerName}");
+        Console.WriteLine($"  Login: {customer.PhoneNumber}");
+        Console.WriteLine($"  Password: {customer.Password}");
+    }
 
     return;
 }

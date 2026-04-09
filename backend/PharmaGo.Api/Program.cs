@@ -140,8 +140,10 @@ if (bootstrapPharmacistSmoke)
 
     Console.WriteLine("Pharmacist smoke bootstrap completed.");
     Console.WriteLine($"Pharmacy: {bootstrapResult.PharmacyName} ({bootstrapResult.PharmacyId})");
-    Console.WriteLine($"Phone: {bootstrapResult.PharmacistPhoneNumber}");
-    Console.WriteLine($"Password: {bootstrapResult.PharmacistPassword}");
+    Console.WriteLine($"Pharmacist phone: {bootstrapResult.PharmacistPhoneNumber}");
+    Console.WriteLine($"Pharmacist password: {bootstrapResult.PharmacistPassword}");
+    Console.WriteLine($"Moderator phone: {bootstrapResult.ModeratorPhoneNumber}");
+    Console.WriteLine($"Moderator password: {bootstrapResult.ModeratorPassword}");
     Console.WriteLine($"Pending reservation: {bootstrapResult.PendingReservationNumber}");
     Console.WriteLine($"Ready reservation: {bootstrapResult.ReadyReservationNumber}");
 

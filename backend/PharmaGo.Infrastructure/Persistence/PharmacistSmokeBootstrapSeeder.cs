@@ -11,8 +11,11 @@ public static class PharmacistSmokeBootstrapSeeder
     public const string PharmacyName = "Bootstrap Pharmacy Baku";
     public const string PharmacistPhoneNumber = "+994509990001";
     public const string PharmacistPassword = "Pharmacist123!";
+    public const string ModeratorPhoneNumber = "+994509990003";
+    public const string ModeratorPassword = "Moderator123!";
 
     private const string PharmacistEmail = "bootstrap.pharmacist@pharmago.local";
+    private const string ModeratorEmail = "bootstrap.moderator@pharmago.local";
     private const string CustomerPhoneNumber = "+994509990101";
     private const string CustomerPassword = "User12345!";
     private const string CustomerEmail = "bootstrap.customer@pharmago.local";
@@ -63,6 +66,17 @@ public static class PharmacistSmokeBootstrapSeeder
             pharmacyId: pharmacy.Id,
             password: PharmacistPassword,
             cancellationToken);
+        var moderator = await EnsureUserAsync(
+            context,
+            passwordHasher,
+            firstName: "Nigar",
+            lastName: "Moderatorova",
+            phoneNumber: ModeratorPhoneNumber,
+            email: ModeratorEmail,
+            role: UserRole.Moderator,
+            pharmacyId: null,
+            password: ModeratorPassword,
+            cancellationToken);
         var customer = await EnsureUserAsync(
             context,
             passwordHasher,
@@ -100,6 +114,9 @@ public static class PharmacistSmokeBootstrapSeeder
             pharmacist.Id,
             PharmacistPhoneNumber,
             PharmacistPassword,
+            moderator.Id,
+            ModeratorPhoneNumber,
+            ModeratorPassword,
             reservations.Pending.ReservationNumber,
             reservations.Ready.ReservationNumber);
     }
@@ -607,6 +624,9 @@ public static class PharmacistSmokeBootstrapSeeder
         Guid PharmacistUserId,
         string PharmacistPhoneNumber,
         string PharmacistPassword,
+        Guid ModeratorUserId,
+        string ModeratorPhoneNumber,
+        string ModeratorPassword,
         string PendingReservationNumber,
         string ReadyReservationNumber);
 

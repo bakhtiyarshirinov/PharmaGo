@@ -348,3 +348,57 @@ export interface RestockSuggestion {
   wholesalePrice: number
   estimatedWholesaleCost: number
 }
+
+export interface ManagedPharmacy {
+  id: string
+  name: string
+  address: string
+  city: string
+  region?: string | null
+  phoneNumber?: string | null
+  locationLatitude?: number | null
+  locationLongitude?: number | null
+  isOpen24Hours: boolean
+  openingHoursJson?: string | null
+  supportsReservations: boolean
+  hasDelivery: boolean
+  isActive: boolean
+  pharmacyChainId?: string | null
+  pharmacyChainName?: string | null
+  employeeCount: number
+  activeStockItemCount: number
+  activeReservationCount: number
+  lastLocationVerifiedAtUtc?: string | null
+  createdAtUtc: string
+  updatedAtUtc?: string | null
+}
+
+export interface ManagedUser {
+  id: string
+  firstName: string
+  lastName: string
+  phoneNumber: string
+  email?: string | null
+  telegramUsername?: string | null
+  telegramChatId?: string | null
+  role: number
+  isActive: boolean
+  pharmacyId?: string | null
+  pharmacyName?: string | null
+  createdAtUtc: string
+  updatedAtUtc?: string | null
+}
+
+export interface AuditLogEntry {
+  id: string
+  action: string
+  entityName: string
+  entityId?: string | null
+  description: string
+  metadataJson?: string | null
+  userId?: string | null
+  userFullName?: string | null
+  pharmacyId?: string | null
+  pharmacyName?: string | null
+  createdAtUtc: string
+}

@@ -1,11 +1,8 @@
-import { EmptyState, PageHeader } from '@pharmago/ui'
+import { readSessionMeta } from '@pharmago/auth/server'
+import { PharmaciesScreen } from '../../../modules/pharmacies/PharmaciesScreen'
 
-export default function AdminPharmaciesPage() {
-  return (
-    <div className="space-y-8">
-      <PageHeader eyebrow="Pharmacies" title="Pharmacy management" description="Use a server-paginated table with a wide drawer for editing pharmacy profile and schedule." />
-      <EmptyState title="Pharmacies admin scaffold" description="Connect admin pharmacy CRUD and schedule management here." />
-    </div>
-  )
+export default async function AdminPharmaciesPage() {
+  const session = await readSessionMeta()
+
+  return <PharmaciesScreen initialSession={session} />
 }
-

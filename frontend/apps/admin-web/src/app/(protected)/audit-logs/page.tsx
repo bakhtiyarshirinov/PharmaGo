@@ -1,11 +1,8 @@
-import { EmptyState, PageHeader } from '@pharmago/ui'
+import { readSessionMeta } from '@pharmago/auth/server'
+import { AuditLogsScreen } from '../../../modules/audit/AuditLogsScreen'
 
-export default function AuditLogsPage() {
-  return (
-    <div className="space-y-8">
-      <PageHeader eyebrow="Audit" title="Audit log review" description="Audit log UX should be table-first with filters and structured metadata inspectors." />
-      <EmptyState title="Audit log scaffold" description="Connect audit logs pagination, filters and detail panels here." />
-    </div>
-  )
+export default async function AuditLogsPage() {
+  const session = await readSessionMeta()
+
+  return <AuditLogsScreen initialSession={session} />
 }
-

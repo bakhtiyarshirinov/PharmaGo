@@ -2,7 +2,67 @@
 @tailwind components;
 @tailwind utilities;
 
-body {
-  @apply bg-slate-100 text-slate-950 antialiased;
+@import url('https://fonts.googleapis.com/css2?family=Fraunces:wght@600;700&family=Manrope:wght@400;500;600;700;800&display=swap');
+
+:root {
+  --admin-bg: #eef4ff;
+  --admin-surface: rgba(255, 255, 255, 0.82);
+  --admin-border: rgba(148, 163, 184, 0.22);
+  --admin-ink: #0f172a;
+  --admin-muted: #475569;
+  --admin-accent: #0f766e;
 }
 
+body {
+  background:
+    radial-gradient(circle at top left, rgba(14, 165, 233, 0.15), transparent 32%),
+    radial-gradient(circle at top right, rgba(20, 184, 166, 0.16), transparent 28%),
+    linear-gradient(180deg, #f8fbff 0%, var(--admin-bg) 50%, #f5f8ff 100%);
+  color: var(--admin-ink);
+  font-family: 'Manrope', sans-serif;
+  @apply antialiased;
+}
+
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  background-image:
+    linear-gradient(rgba(148, 163, 184, 0.06) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(148, 163, 184, 0.06) 1px, transparent 1px);
+  background-size: 32px 32px;
+  mask-image: linear-gradient(180deg, rgba(15, 23, 42, 0.3), transparent 72%);
+}
+
+::selection {
+  background: rgba(13, 148, 136, 0.18);
+}
+
+.admin-display {
+  font-family: 'Fraunces', serif;
+  letter-spacing: -0.03em;
+}
+
+.admin-glass {
+  backdrop-filter: blur(24px);
+  background: var(--admin-surface);
+  border: 1px solid var(--admin-border);
+  box-shadow: 0 30px 80px rgba(15, 23, 42, 0.08);
+}
+
+.admin-enter {
+  animation: admin-enter 420ms ease-out both;
+}
+
+@keyframes admin-enter {
+  from {
+    opacity: 0;
+    transform: translateY(16px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}

@@ -1,11 +1,8 @@
-import { EmptyState, PageHeader } from '@pharmago/ui'
+import { readSessionMeta } from '@pharmago/auth/server'
+import { MedicinesScreen } from '../../../../modules/master-data/MedicinesScreen'
 
-export default function AdminMedicinesPage() {
-  return (
-    <div className="space-y-8">
-      <PageHeader eyebrow="Master data" title="Medicines catalog admin" description="This is the main master-data screen: table, filters, create/edit forms and validation feedback." />
-      <EmptyState title="Medicines admin scaffold" description="Wire the admin master-data medicines endpoints here." />
-    </div>
-  )
+export default async function AdminMedicinesPage() {
+  const session = await readSessionMeta()
+
+  return <MedicinesScreen initialSession={session} />
 }
-

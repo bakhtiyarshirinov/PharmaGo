@@ -402,3 +402,28 @@ export interface AuditLogEntry {
   pharmacyName?: string | null
   createdAtUtc: string
 }
+
+export interface ManagedMedicineCategory {
+  id: string
+  name: string
+  description?: string | null
+  medicinesCount: number
+}
+
+export interface ManagedMedicine {
+  id: string
+  brandName: string
+  genericName: string
+  description?: string | null
+  dosageForm: string
+  strength: string
+  manufacturer: string
+  countryOfOrigin?: string | null
+  barcode?: string | null
+  requiresPrescription: boolean
+  isActive: boolean
+  categoryId?: string | null
+  categoryName?: string | null
+  stockBatchCount: number
+  supplierOfferCount: number
+}

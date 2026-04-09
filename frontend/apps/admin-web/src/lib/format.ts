@@ -48,3 +48,11 @@ export function getUserRoleTone(role: number) {
       return 'neutral' as const
   }
 }
+
+export function getActiveStateLabel(isActive: boolean) {
+  return isActive ? 'Активно' : 'Выключено'
+}
+
+export function getActiveStateTone(isActive: boolean) {
+  return isActive ? 'success' as const : 'neutral' as const
+}

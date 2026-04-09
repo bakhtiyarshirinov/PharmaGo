@@ -24,6 +24,20 @@ export const queryKeys = {
       isActive: string
     }) => ['admin', 'users', params] as const,
   },
+  masterData: {
+    medicines: (params: {
+      page: number
+      pageSize: number
+      search: string
+      categoryId: string
+      isActive: string
+    }) => ['admin', 'master-data', 'medicines', params] as const,
+    categories: (params: {
+      page: number
+      pageSize: number
+      search: string
+    }) => ['admin', 'master-data', 'categories', params] as const,
+  },
   audit: {
     list: (params: {
       pharmacyId: string

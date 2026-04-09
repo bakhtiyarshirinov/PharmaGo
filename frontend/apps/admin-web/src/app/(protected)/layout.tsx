@@ -22,6 +22,7 @@ export default async function ProtectedLayout({ children }: { children: React.Re
             <NavLink href="/overview">Overview</NavLink>
             <NavLink href="/users">Users</NavLink>
             <NavLink href="/pharmacies">Pharmacies</NavLink>
+            <NavLink href="/master-data/medicines">Medicines</NavLink>
             <NavLink href="/audit-logs">Audit</NavLink>
           </nav>
         </div>

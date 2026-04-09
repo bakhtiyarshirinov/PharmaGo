@@ -1,4 +1,11 @@
-import type { AuditLogEntry, ManagedPharmacy, ManagedUser, PagedResponse } from '@pharmago/types'
+import type {
+  AuditLogEntry,
+  ManagedMedicine,
+  ManagedMedicineCategory,
+  ManagedPharmacy,
+  ManagedUser,
+  PagedResponse,
+} from '@pharmago/types'
 import type { RequestOptions } from '../http/client'
 
 export function createAdminApi(request: <T>(path: string, options?: RequestOptions) => Promise<T>) {
@@ -79,8 +86,92 @@ export function createAdminApi(request: <T>(path: string, options?: RequestOptio
         method: 'POST',
       })
     },
-    medicines(params: { page?: number; pageSize?: number; search?: string } = {}) {
-      return request<PagedResponse<Record<string, unknown>>>('/api/v1/admin/master-data/medicines', { query: params })
+    medicineCategories(params: {
+      page?: number
+      pageSize?: number
+      search?: string
+      sortDirection?: 'asc' | 'desc'
+    } = {}) {
+      return request<PagedResponse<ManagedMedicineCategory>>('/api/v1/admin/master-data/categories', {
+        query: params,
+      })
+    },
+    medicineCategory(categoryId: string) {
+      return request<ManagedMedicineCategory>(`/api/v1/admin/master-data/categories/${categoryId}`)
+    },
+    createMedicineCategory(input: {
+      name: string
+      description?: string | null
+    }) {
+      return request<ManagedMedicineCategory>('/api/v1/admin/master-data/categories', {
+        method: 'POST',
+        body: input,
+      })
+    },
+    updateMedicineCategory(
+      categoryId: string,
+      input: {
+        name: string
+        description?: string | null
+      },
+    ) {
+      return request<ManagedMedicineCategory>(`/api/v1/admin/master-data/categories/${categoryId}`, {
+        method: 'PUT',
+        body: input,
+      })
+    },
+    medicines(params: {
+      page?: number
+      pageSize?: number
+      search?: string
+      categoryId?: string
+      isActive?: boolean
+      sortBy?: string
+      sortDirection?: 'asc' | 'desc'
+    } = {}) {
+      return request<PagedResponse<ManagedMedicine>>('/api/v1/admin/master-data/medicines', { query: params })
+    },
+    medicine(medicineId: string) {
+      return request<ManagedMedicine>(`/api/v1/admin/master-data/medicines/${medicineId}`)
+    },
+    createMedicine(input: {
+      brandName: string
+      genericName: string
+      description?: string | null
+      dosageForm: string
+      strength: string
+      manufacturer: string
+      countryOfOrigin?: string | null
+      barcode?: string | null
+      requiresPrescription: boolean
+      isActive: boolean
+      categoryId?: string | null
+    }) {
+      return request<ManagedMedicine>('/api/v1/admin/master-data/medicines', {
+        method: 'POST',
+        body: input,
+      })
+    },
+    updateMedicine(
+      medicineId: string,
+      input: {
+        brandName: string
+        genericName: string
+        description?: string | null
+        dosageForm: string
+        strength: string
+        manufacturer: string
+        countryOfOrigin?: string | null
+        barcode?: string | null
+        requiresPrescription: boolean
+        isActive: boolean
+        categoryId?: string | null
+      },
+    ) {
+      return request<ManagedMedicine>(`/api/v1/admin/master-data/medicines/${medicineId}`, {
+        method: 'PUT',
+        body: input,
+      })
     },
     auditLogs(params: { pharmacyId?: string; entityName?: string; action?: string } = {}) {
       return request<AuditLogEntry[]>('/api/v1/auditlogs', { query: params })

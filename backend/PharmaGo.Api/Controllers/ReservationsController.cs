@@ -252,15 +252,31 @@ public class ReservationsController(
     {
         var dbContext = (ApplicationDbContext)context;
         idempotencyKey = idempotencyKey?.Trim();
+        var normalizedNotes = string.IsNullOrWhiteSpace(request.Notes) ? null : request.Notes.Trim();
 
         if (request.Items.Count == 0)
         {
             return ValidationProblemResponse("reservation_validation_error", "At least one reservation item is required.");
         }
 
+        if (request.PharmacyId == Guid.Empty)
+        {
+            return ValidationProblemResponse("reservation_validation_error", "PharmacyId is required.");
+        }
+
+        if (request.Items.Any(item => item.MedicineId == Guid.Empty))
+        {
+            return ValidationProblemResponse("reservation_validation_error", "MedicineId is required for each reservation item.");
+        }
+
         if (request.Items.Any(item => item.Quantity <= 0))
         {
             return ValidationProblemResponse("reservation_validation_error", "Reservation item quantities must be greater than zero.");
+        }
+
+        if (normalizedNotes is not null && normalizedNotes.Length > 1000)
+        {
+            return ValidationProblemResponse("reservation_validation_error", "Notes cannot exceed 1000 characters.");
         }
 
         if (request.ReserveForHours != _reservationPolicy.ReservationLifetimeHours)
@@ -447,7 +463,7 @@ public class ReservationsController(
                     Customer = customer,
                     Pharmacy = pharmacy,
                     Status = ReservationStatus.Pending,
-                    Notes = request.Notes?.Trim(),
+                    Notes = normalizedNotes,
                     ReservedUntilUtc = now.AddHours(_reservationPolicy.ReservationLifetimeHours),
                     PickupAvailableFromUtc = pickupAvailableFromUtc ?? now,
                     TelegramChatId = customer.TelegramChatId
@@ -727,18 +743,14 @@ public class ReservationsController(
             return ApiNotFound("reservation_not_found", "Reservation was not found.");
         }
 
-        if (reservation.Status == nextStatus)
-        {
-            var currentResponse = await QueryReservations()
-                .Where(x => x.ReservationId == reservation.Id)
-                .FirstAsync(cancellationToken);
-
-            return Ok(currentResponse);
-        }
-
         var isModerator = User.IsInRole(RoleNames.Moderator);
         var isPharmacist = User.IsInRole(RoleNames.Pharmacist);
         var isOwner = currentUserService.UserId == reservation.CustomerId;
+
+        if (!isOwner && !isPharmacist && !isModerator)
+        {
+            return ApiForbidden("You do not have access to this reservation.");
+        }
 
         if (isPharmacist && !isModerator)
         {
@@ -747,6 +759,15 @@ public class ReservationsController(
             {
                 return accessResult;
             }
+        }
+
+        if (reservation.Status == nextStatus)
+        {
+            var currentResponse = await QueryReservations()
+                .Where(x => x.ReservationId == reservation.Id)
+                .FirstAsync(cancellationToken);
+
+            return Ok(currentResponse);
         }
 
         var initialTransitionDecision = reservationTransitionPolicy.Evaluate(

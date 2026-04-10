@@ -38,6 +38,12 @@ public class MedicinesController(
             return ApiValidationProblem("geo_coordinates_incomplete", "Latitude and Longitude must be provided together.");
         }
 
+        var geoValidationError = ValidateCoordinates(request.Latitude, request.Longitude);
+        if (geoValidationError is not null)
+        {
+            return geoValidationError;
+        }
+
         var medicines = await medicineSearchService.SearchAsync(request, cancellationToken);
         return Ok(medicines);
     }
@@ -133,6 +139,12 @@ public class MedicinesController(
             return ApiValidationProblem("geo_coordinates_incomplete", "Latitude and Longitude must be provided together.");
         }
 
+        var geoValidationError = ValidateCoordinates(request.Latitude, request.Longitude);
+        if (geoValidationError is not null)
+        {
+            return geoValidationError;
+        }
+
         request.MedicineId = id;
 
         var response = await medicineAvailabilityService.GetAvailabilityAsync(request, cancellationToken);
@@ -142,5 +154,20 @@ public class MedicinesController(
         }
 
         return Ok(response);
+    }
+
+    private BadRequestObjectResult? ValidateCoordinates(double? latitude, double? longitude)
+    {
+        if (latitude.HasValue && (latitude.Value < -90 || latitude.Value > 90))
+        {
+            return ApiValidationProblem("geo_latitude_invalid", "Latitude must be between -90 and 90.");
+        }
+
+        if (longitude.HasValue && (longitude.Value < -180 || longitude.Value > 180))
+        {
+            return ApiValidationProblem("geo_longitude_invalid", "Longitude must be between -180 and 180.");
+        }
+
+        return null;
     }
 }

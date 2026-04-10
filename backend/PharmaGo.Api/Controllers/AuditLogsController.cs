@@ -40,6 +40,11 @@ public class AuditLogsController(IApplicationDbContext context, ICurrentUserServ
                 .FirstOrDefaultAsync(x => x.Id == currentUserService.UserId, cancellationToken);
 
             effectivePharmacyId = currentUser?.PharmacyId;
+
+            if (!effectivePharmacyId.HasValue)
+            {
+                return ApiForbidden("You do not have access to audit logs without an assigned pharmacy.");
+            }
         }
 
         var auditLogs = await context.AuditLogs

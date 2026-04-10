@@ -143,11 +143,10 @@ if (bootstrapPharmacistSmoke)
     Console.WriteLine("Pharmacist smoke bootstrap completed.");
     Console.WriteLine($"Pharmacy: {bootstrapResult.PharmacyName} ({bootstrapResult.PharmacyId})");
     Console.WriteLine($"Pharmacist phone: {bootstrapResult.PharmacistPhoneNumber}");
-    Console.WriteLine($"Pharmacist password: {bootstrapResult.PharmacistPassword}");
     Console.WriteLine($"Moderator phone: {bootstrapResult.ModeratorPhoneNumber}");
-    Console.WriteLine($"Moderator password: {bootstrapResult.ModeratorPassword}");
     Console.WriteLine($"Pending reservation: {bootstrapResult.PendingReservationNumber}");
     Console.WriteLine($"Ready reservation: {bootstrapResult.ReadyReservationNumber}");
+    Console.WriteLine("Credentials were generated but are intentionally omitted from console output.");
 
     return;
 }
@@ -166,7 +165,6 @@ if (bootstrapShowcaseData)
 
     Console.WriteLine("Showcase bootstrap completed.");
     Console.WriteLine($"Moderator phone: {bootstrapResult.ModeratorPhoneNumber}");
-    Console.WriteLine($"Moderator password: {bootstrapResult.ModeratorPassword}");
     Console.WriteLine($"Pharmacies: {bootstrapResult.Pharmacies.Count}");
     Console.WriteLine($"Medicines: {bootstrapResult.MedicineCount}");
     Console.WriteLine($"Stock items: {bootstrapResult.StockItemCount}");
@@ -178,15 +176,15 @@ if (bootstrapShowcaseData)
         Console.WriteLine($"  Pharmacy ID: {pharmacy.PharmacyId}");
         Console.WriteLine($"  Pharmacist: {pharmacy.PharmacistName}");
         Console.WriteLine($"  Login: {pharmacy.PharmacistPhoneNumber}");
-        Console.WriteLine($"  Password: {pharmacy.PharmacistPassword}");
     }
 
     foreach (var customer in bootstrapResult.Customers)
     {
         Console.WriteLine($"Customer: {customer.CustomerName}");
         Console.WriteLine($"  Login: {customer.PhoneNumber}");
-        Console.WriteLine($"  Password: {customer.Password}");
     }
+
+    Console.WriteLine("Generated credentials are intentionally omitted from console output.");
 
     return;
 }

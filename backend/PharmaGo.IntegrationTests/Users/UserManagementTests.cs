@@ -1,6 +1,7 @@
 using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using PharmaGo.Application.Auth.Contracts;
@@ -182,5 +183,79 @@ public class UserManagementTests(CustomWebApplicationFactory factory) : IClassFi
         });
 
         Assert.Equal(HttpStatusCode.OK, loginAgain.StatusCode);
+    }
+
+    [Fact]
+    public async Task Moderator_ShouldRejectWeakPassword_WhenCreatingManagedUser()
+    {
+        var moderatorLogin = await _client.PostAsJsonAsync("/api/auth/login", new LoginRequest
+        {
+            PhoneNumber = "+994500000002",
+            Password = "Moderator123!"
+        });
+
+        var moderator = await moderatorLogin.Content.ReadAsAsync<AuthResponse>();
+        Assert.NotNull(moderator);
+
+        _client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", moderator!.AccessToken);
+
+        var response = await _client.PostAsJsonAsync("/api/users", new CreateManagedUserRequest
+        {
+            FirstName = "Weak",
+            LastName = "Managed",
+            PhoneNumber = "+994551110025",
+            Email = "weak-managed@example.com",
+            Password = "lowercase123",
+            Role = UserRole.User
+        });
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+
+        var problem = await response.Content.ReadFromJsonAsync<ProblemDetails>();
+        Assert.NotNull(problem);
+        Assert.Equal("user_password_too_weak", problem!.Extensions["code"]?.ToString());
+    }
+
+    [Fact]
+    public async Task Moderator_ShouldRejectWhitespaceOnlyNames_WhenUpdatingManagedUser()
+    {
+        var moderatorLogin = await _client.PostAsJsonAsync("/api/auth/login", new LoginRequest
+        {
+            PhoneNumber = "+994500000002",
+            Password = "Moderator123!"
+        });
+
+        var moderator = await moderatorLogin.Content.ReadAsAsync<AuthResponse>();
+        Assert.NotNull(moderator);
+
+        _client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", moderator!.AccessToken);
+
+        var createResponse = await _client.PostAsJsonAsync("/api/users", new CreateManagedUserRequest
+        {
+            FirstName = "Valid",
+            LastName = "User",
+            PhoneNumber = "+994551110026",
+            Email = "valid-managed@example.com",
+            Password = "ValidPassword123",
+            Role = UserRole.User
+        });
+
+        var createdUser = await createResponse.Content.ReadAsAsync<UserManagementResponse>();
+        Assert.NotNull(createdUser);
+
+        var updateResponse = await _client.PutAsJsonAsync($"/api/users/{createdUser!.Id}", new UpdateManagedUserRequest
+        {
+            FirstName = "   ",
+            LastName = "User",
+            PhoneNumber = createdUser.PhoneNumber,
+            Email = createdUser.Email,
+            Role = UserRole.User
+        });
+
+        Assert.Equal(HttpStatusCode.BadRequest, updateResponse.StatusCode);
+
+        var problem = await updateResponse.Content.ReadFromJsonAsync<ProblemDetails>();
+        Assert.NotNull(problem);
+        Assert.Equal("validation_error", problem!.Extensions["code"]?.ToString());
     }
 }

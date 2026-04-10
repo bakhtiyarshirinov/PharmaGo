@@ -7,10 +7,9 @@ export default function LoginPage() {
       <PageHeader
         eyebrow="Authentication"
         title="Sign in to continue your reservation flow."
-        description="Login is handled through the frontend BFF. Refresh token stays in an httpOnly cookie; access token stays in memory."
+        description="Login is handled through the frontend BFF. Session state is refreshed through server auth routes, so the app restores your reservation flow without exposing cookie state to the browser."
       />
       <LoginForm />
     </div>
   )
 }
-

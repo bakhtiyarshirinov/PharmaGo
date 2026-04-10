@@ -13,6 +13,7 @@ using PharmaGo.Application.Stocks.Commands.WriteOffStock;
 using PharmaGo.Application.Stocks.Queries.GetExpiringStockAlerts;
 using PharmaGo.Application.Stocks.Queries.GetOutOfStockAlerts;
 using PharmaGo.Application.Stocks.Queries.GetStocks;
+using PharmaGo.Domain.Models;
 using PharmaGo.IntegrationTests.Infrastructure;
 using PharmaGo.Infrastructure.Persistence;
 
@@ -119,6 +120,33 @@ public class StockManagementTests(CustomWebApplicationFactory factory) : IClassF
         Assert.Equal(0.85m, payload.PurchasePrice);
         Assert.Equal(1.40m, payload.RetailPrice);
         Assert.Equal(8, payload.ReorderLevel);
+    }
+
+    [Fact]
+    public async Task Receive_ShouldRejectRetailPriceBelowPurchasePrice()
+    {
+        await AuthorizePharmacistAsync();
+
+        Guid stockItemId;
+
+        using (var scope = factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+            stockItemId = await db.StockItems
+                .Include(x => x.Pharmacy)
+                .Where(x => x.Pharmacy!.Name == "PharmaGo Central" && x.Quantity >= 5)
+                .Select(x => x.Id)
+                .FirstAsync();
+        }
+
+        var response = await _client.PostAsJsonAsync($"/api/stocks/{stockItemId}/receive", new ReceiveStockRequest
+        {
+            QuantityReceived = 5,
+            RetailPrice = 0.10m,
+            Reason = "Supplier delivery"
+        });
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
     }
 
     [Fact]
@@ -272,6 +300,55 @@ public class StockManagementTests(CustomWebApplicationFactory factory) : IClassF
 
         var response = await _client.PutAsJsonAsync($"/api/stocks/{stockItemId}", request);
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task Update_ShouldRejectDuplicateBatchNumberWithinSamePharmacyAndMedicine()
+    {
+        await AuthorizePharmacistAsync();
+
+        Guid stockItemId;
+        UpdateStockItemRequest request;
+
+        using (var scope = factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+            var originalStockItem = await db.StockItems
+                .Include(x => x.Pharmacy)
+                .Include(x => x.Medicine)
+                .FirstAsync(x => x.Pharmacy!.Name == "PharmaGo Central" && x.Medicine!.BrandName == "Panadol");
+
+            var duplicateStockItem = new StockItem
+            {
+                PharmacyId = originalStockItem.PharmacyId,
+                MedicineId = originalStockItem.MedicineId,
+                BatchNumber = "PAN-DUPLICATE-T1",
+                ExpirationDate = originalStockItem.ExpirationDate.AddDays(10),
+                Quantity = originalStockItem.Quantity + 3,
+                PurchasePrice = originalStockItem.PurchasePrice,
+                RetailPrice = originalStockItem.RetailPrice,
+                ReorderLevel = originalStockItem.ReorderLevel,
+                IsActive = true
+            };
+
+            await db.StockItems.AddAsync(duplicateStockItem);
+            await db.SaveChangesAsync();
+
+            stockItemId = originalStockItem.Id;
+            request = new UpdateStockItemRequest
+            {
+                BatchNumber = "  PAN-DUPLICATE-T1  ",
+                ExpirationDate = originalStockItem.ExpirationDate,
+                Quantity = originalStockItem.Quantity,
+                PurchasePrice = originalStockItem.PurchasePrice,
+                RetailPrice = originalStockItem.RetailPrice,
+                ReorderLevel = originalStockItem.ReorderLevel,
+                IsActive = originalStockItem.IsActive
+            };
+        }
+
+        var response = await _client.PutAsJsonAsync($"/api/stocks/{stockItemId}", request);
+        Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
     }
 
     [Fact]

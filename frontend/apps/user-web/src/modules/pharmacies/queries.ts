@@ -37,7 +37,7 @@ export function usePopularPharmacies(limit = 6) {
 export function usePharmacyDetail(pharmacyId?: string) {
   return useQuery({
     queryKey: ['pharmacies', 'detail', pharmacyId],
-    queryFn: () => pharmaciesApi.detail(pharmacyId!),
+    queryFn: () => pharmaciesApi.detail(requireValue(pharmacyId, 'pharmacyId')),
     enabled: Boolean(pharmacyId),
   })
 }
@@ -45,7 +45,15 @@ export function usePharmacyDetail(pharmacyId?: string) {
 export function usePharmacyMedicines(pharmacyId?: string, page = 1, pageSize = 12) {
   return useQuery({
     queryKey: ['pharmacies', 'medicines', pharmacyId, page, pageSize],
-    queryFn: () => pharmaciesApi.medicines(pharmacyId!, page, pageSize),
+    queryFn: () => pharmaciesApi.medicines(requireValue(pharmacyId, 'pharmacyId'), page, pageSize),
     enabled: Boolean(pharmacyId),
   })
+}
+
+function requireValue(value: string | undefined, fieldName: string) {
+  if (!value) {
+    throw new Error(`${fieldName} is required`)
+  }
+
+  return value
 }

@@ -296,6 +296,70 @@ public class ReservationFlowTests(CustomWebApplicationFactory factory) : IClassF
     }
 
     [Fact]
+    public async Task CreateReservation_ShouldRejectEmptyMedicineId()
+    {
+        using var scope = factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+        var pharmacy = await db.Pharmacies.FirstAsync(x => x.Name == "PharmaGo Central");
+
+        var auth = await RegisterAndAuthorizeAsync(_client, "+994551110024", "empty-medicine@example.com");
+        Assert.NotNull(auth);
+
+        var response = await _client.PostAsJsonAsync("/api/reservations", new CreateReservationRequest
+        {
+            PharmacyId = pharmacy.Id,
+            ReserveForHours = 2,
+            Items =
+            [
+                new CreateReservationItemRequest
+                {
+                    MedicineId = Guid.Empty,
+                    Quantity = 1
+                }
+            ]
+        });
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+
+        var problem = await response.Content.ReadFromJsonAsync<ProblemDetails>();
+        Assert.NotNull(problem);
+        Assert.Equal("reservation_validation_error", problem!.Extensions["code"]?.ToString());
+    }
+
+    [Fact]
+    public async Task CreateReservation_ShouldRejectNotesLongerThanLimit()
+    {
+        using var scope = factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+        var pharmacy = await db.Pharmacies.FirstAsync(x => x.Name == "PharmaGo Central");
+        var stockItem = await db.StockItems.FirstAsync(x => x.PharmacyId == pharmacy.Id && x.Quantity >= 1);
+
+        var auth = await RegisterAndAuthorizeAsync(_client, "+994551110025", "long-notes@example.com");
+        Assert.NotNull(auth);
+
+        var response = await _client.PostAsJsonAsync("/api/reservations", new CreateReservationRequest
+        {
+            PharmacyId = pharmacy.Id,
+            ReserveForHours = 2,
+            Notes = new string('N', 1001),
+            Items =
+            [
+                new CreateReservationItemRequest
+                {
+                    MedicineId = stockItem.MedicineId,
+                    Quantity = 1
+                }
+            ]
+        });
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+
+        var problem = await response.Content.ReadFromJsonAsync<ProblemDetails>();
+        Assert.NotNull(problem);
+        Assert.Equal("validation_error", problem!.Extensions["code"]?.ToString());
+    }
+
+    [Fact]
     public async Task Pharmacist_ShouldCompleteReservation_UsingExplicitCommands_AndDeductStock()
     {
         using var scope = factory.Services.CreateScope();
@@ -694,6 +758,51 @@ public class ReservationFlowTests(CustomWebApplicationFactory factory) : IClassF
         var problem = await confirmResponse.Content.ReadFromJsonAsync<ProblemDetails>();
         Assert.NotNull(problem);
         Assert.Equal("reservation_transition_invalid", problem!.Extensions["code"]?.ToString());
+    }
+
+    [Fact]
+    public async Task UpdateStatus_ShouldNotExposeReservation_WhenRequesterDoesNotOwnIt()
+    {
+        using var scope = factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+        var pharmacy = await db.Pharmacies.FirstAsync(x => x.Name == "PharmaGo Central");
+        var stockItem = await db.StockItems.FirstAsync(x => x.PharmacyId == pharmacy.Id && x.Quantity >= 2);
+
+        var ownerAuth = await RegisterAndAuthorizeAsync(_client, "+994551110022", "owner-status@example.com");
+        Assert.NotNull(ownerAuth);
+
+        var createResponse = await _client.PostAsJsonAsync("/api/reservations", new CreateReservationRequest
+        {
+            PharmacyId = pharmacy.Id,
+            ReserveForHours = 2,
+            Items =
+            [
+                new CreateReservationItemRequest
+                {
+                    MedicineId = stockItem.MedicineId,
+                    Quantity = 1
+                }
+            ]
+        });
+
+        Assert.Equal(HttpStatusCode.Created, createResponse.StatusCode);
+
+        var reservation = await createResponse.Content.ReadAsAsync<ReservationResponse>();
+        Assert.NotNull(reservation);
+        Assert.Equal(ReservationStatus.Pending, reservation!.Status);
+
+        var outsiderClient = factory.CreateClient();
+        var outsiderAuth = await RegisterAndAuthorizeAsync(outsiderClient, "+994551110023", "outsider-status@example.com");
+        Assert.NotNull(outsiderAuth);
+
+        var response = await outsiderClient.PatchAsJsonAsync(
+            $"/api/reservations/{reservation.ReservationId}/status",
+            new UpdateReservationStatusRequest
+            {
+                Status = ReservationStatus.Pending
+            });
+
+        Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
     }
 
     [Fact]

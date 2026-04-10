@@ -110,6 +110,7 @@ public class AdminPharmaciesController(
             request.Name,
             request.Address,
             request.City,
+            request.PhoneNumber,
             request.LocationLatitude,
             request.LocationLongitude,
             request.IsOpen24Hours,
@@ -204,6 +205,7 @@ public class AdminPharmaciesController(
             request.Name,
             request.Address,
             request.City,
+            request.PhoneNumber,
             request.LocationLatitude,
             request.LocationLongitude,
             request.IsOpen24Hours,
@@ -305,7 +307,7 @@ public class AdminPharmaciesController(
         }
 
         pharmacy.IsOpen24Hours = request.IsOpen24Hours;
-        pharmacy.OpeningHoursJson = request.IsOpen24Hours ? normalizedOpeningHoursJson : normalizedOpeningHoursJson;
+        pharmacy.OpeningHoursJson = normalizedOpeningHoursJson;
 
         await context.SaveChangesAsync(cancellationToken);
         await BumpRelevantCachesAsync(cancellationToken);
@@ -461,6 +463,7 @@ public class AdminPharmaciesController(
         string name,
         string address,
         string city,
+        string? phoneNumber,
         decimal? locationLatitude,
         decimal? locationLongitude,
         bool isOpen24Hours,
@@ -489,6 +492,12 @@ public class AdminPharmaciesController(
             return (ApiValidationProblem("pharmacy_coordinates_incomplete", "Latitude and longitude must be provided together."), null);
         }
 
+        var normalizedPhoneNumber = NormalizeOptional(phoneNumber);
+        if (normalizedPhoneNumber is not null && normalizedPhoneNumber.Length < 7)
+        {
+            return (ApiValidationProblem("pharmacy_phone_invalid", "Phone number must be at least 7 characters long."), null);
+        }
+
         if (!isOpen24Hours && string.IsNullOrWhiteSpace(openingHoursJson))
         {
             return (ApiValidationProblem("pharmacy_schedule_required", "Opening hours are required when the pharmacy is not open 24 hours."), null);
@@ -509,6 +518,11 @@ public class AdminPharmaciesController(
         }
 
         return (null, normalizedOpeningHoursJson);
+    }
+
+    private static string? NormalizeOptional(string? value)
+    {
+        return string.IsNullOrWhiteSpace(value) ? null : value.Trim();
     }
 
     private static void SyncLegacyCoordinates(Pharmacy pharmacy)
@@ -538,8 +552,4 @@ public class AdminPharmaciesController(
     private static string NormalizeSortDirection(string? value)
         => string.Equals(value, "desc", StringComparison.OrdinalIgnoreCase) ? "desc" : "asc";
 
-    private static string? NormalizeOptional(string? value)
-    {
-        return string.IsNullOrWhiteSpace(value) ? null : value.Trim();
-    }
 }

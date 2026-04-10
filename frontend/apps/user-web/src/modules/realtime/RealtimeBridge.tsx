@@ -26,11 +26,18 @@ function joinUrl(base: string, path: string) {
 export function RealtimeBridge() {
   const queryClient = useQueryClient()
   const session = useAuthStore((state) => state.session)
+  const setSession = useAuthStore((state) => state.setSession)
 
   useEffect(() => {
     const accessToken = session?.accessToken
+    const expiresAtUtc = session?.expiresAtUtc
 
     if (!accessToken) {
+      return
+    }
+
+    if (isExpired(expiresAtUtc)) {
+      setSession(null)
       return
     }
 
@@ -80,13 +87,24 @@ export function RealtimeBridge() {
         return
       }
 
+      if (isSessionExpired()) {
+        setSession(null)
+        return
+      }
+
       try {
         await connection.start()
         failureCount = 0
-      } catch {
+      } catch (error) {
         failureCount += 1
 
         if (disposed) {
+          return
+        }
+
+        if (shouldInvalidateSession(error) || isSessionExpired()) {
+          setSession(null)
+          void connection.stop()
           return
         }
 
@@ -108,7 +126,28 @@ export function RealtimeBridge() {
       connection.off('notification.received')
       void connection.stop()
     }
-  }, [queryClient, session?.accessToken])
+    function isSessionExpired() {
+      return isExpired(useAuthStore.getState().session?.expiresAtUtc)
+    }
+  }, [queryClient, session?.accessToken, session?.expiresAtUtc, setSession])
 
   return null
+}
+
+function isExpired(expiresAtUtc?: string | null) {
+  if (!expiresAtUtc) {
+    return false
+  }
+
+  const expiresAtMs = new Date(expiresAtUtc).getTime()
+  return Number.isFinite(expiresAtMs) && expiresAtMs <= Date.now()
+}
+
+function shouldInvalidateSession(error: unknown) {
+  if (!(error instanceof Error)) {
+    return false
+  }
+
+  const message = error.message.toLowerCase()
+  return message.includes('401') || message.includes('unauthorized')
 }

@@ -34,6 +34,12 @@ public class PharmaciesController(
             return ApiValidationProblem("geo_coordinates_incomplete", "Latitude and Longitude must be provided together.");
         }
 
+        var geoValidationError = ValidateCoordinates(request.Latitude, request.Longitude);
+        if (geoValidationError is not null)
+        {
+            return geoValidationError;
+        }
+
         var response = await pharmacyDiscoveryService.SearchAsync(request, cancellationToken);
         return Ok(response);
     }
@@ -73,6 +79,12 @@ public class PharmaciesController(
             return ApiValidationProblem("geo_coordinates_required", "Latitude and Longitude are required.");
         }
 
+        var geoValidationError = ValidateCoordinates(request.Latitude, request.Longitude);
+        if (geoValidationError is not null)
+        {
+            return geoValidationError;
+        }
+
         var response = await pharmacyDiscoveryService.GetMapAsync(request, cancellationToken);
         return Ok(response);
     }
@@ -107,6 +119,12 @@ public class PharmaciesController(
             return ApiValidationProblem("geo_coordinates_incomplete", "Latitude and Longitude must be provided together.");
         }
 
+        var geoValidationError = ValidateCoordinates(latitude, longitude);
+        if (geoValidationError is not null)
+        {
+            return geoValidationError;
+        }
+
         var response = await pharmacyCatalogService.GetByIdAsync(id, latitude, longitude, cancellationToken);
         if (response is null)
         {
@@ -131,5 +149,20 @@ public class PharmaciesController(
     {
         var response = await pharmacyCatalogService.GetMedicinesAsync(id, request, cancellationToken);
         return response is null ? ApiNotFound("pharmacy_not_found", "Pharmacy was not found.") : Ok(response);
+    }
+
+    private BadRequestObjectResult? ValidateCoordinates(double? latitude, double? longitude)
+    {
+        if (latitude.HasValue && (latitude.Value < -90 || latitude.Value > 90))
+        {
+            return ApiValidationProblem("geo_latitude_invalid", "Latitude must be between -90 and 90.");
+        }
+
+        if (longitude.HasValue && (longitude.Value < -180 || longitude.Value > 180))
+        {
+            return ApiValidationProblem("geo_longitude_invalid", "Longitude must be between -180 and 180.");
+        }
+
+        return null;
     }
 }

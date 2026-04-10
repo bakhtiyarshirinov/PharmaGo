@@ -8,6 +8,7 @@ using PharmaGo.Application.Common.Contracts;
 using PharmaGo.Application.Notifications.Contracts;
 using PharmaGo.Application.Reservations.Commands.CreateReservation;
 using PharmaGo.Application.Reservations.Queries.GetReservation;
+using PharmaGo.Domain.Models;
 using PharmaGo.Domain.Models.Enums;
 using PharmaGo.IntegrationTests.Infrastructure;
 using PharmaGo.Infrastructure.Persistence;
@@ -172,6 +173,65 @@ public class NotificationInboxTests(CustomWebApplicationFactory factory) : IClas
         var unreadOnlyPayload = await unreadOnlyResponse.Content.ReadAsAsync<PagedResponse<NotificationHistoryItemResponse>>();
         Assert.NotNull(unreadOnlyPayload);
         Assert.Contains(unreadOnlyPayload!.Items, x => targetIds.Contains(x.NotificationId));
+    }
+
+    [Fact]
+    public async Task ReadEndpoints_ShouldIgnoreFailedNotifications()
+    {
+        var auth = await RegisterAndAuthorizeAsync(_client, "+994551110210", "notify-failed@example.com");
+        Assert.NotNull(auth);
+
+        Guid userId;
+        using (var scope = factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+            userId = await db.Users
+                .Where(x => x.Email == "notify-failed@example.com")
+                .Select(x => x.Id)
+                .SingleAsync();
+
+            await db.NotificationDeliveryLogs.AddAsync(new NotificationDeliveryLog
+            {
+                UserId = userId,
+                EventType = NotificationEventType.ReservationReadyForPickup,
+                Channel = NotificationChannel.InApp,
+                Status = NotificationDeliveryStatus.Failed,
+                Title = "Delivery failed",
+                Message = "This notification should not become readable.",
+                ErrorMessage = "Simulated failure"
+            });
+
+            await db.SaveChangesAsync();
+        }
+
+        Guid failedNotificationId;
+        using (var verificationScope = factory.Services.CreateScope())
+        {
+            var db = verificationScope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+            failedNotificationId = await db.NotificationDeliveryLogs
+                .Where(x => x.UserId == userId && x.Status == NotificationDeliveryStatus.Failed)
+                .Select(x => x.Id)
+                .SingleAsync();
+        }
+
+        var markReadResponse = await _client.PostAsync($"/api/notifications/{failedNotificationId}/read", null);
+        Assert.Equal(HttpStatusCode.NotFound, markReadResponse.StatusCode);
+
+        var bulkResponse = await _client.PostAsJsonAsync("/api/notifications/status/bulk", new NotificationBulkStatusUpdateRequest
+        {
+            NotificationIds = [failedNotificationId],
+            MarkAsRead = true
+        });
+
+        Assert.Equal(HttpStatusCode.OK, bulkResponse.StatusCode);
+
+        using var finalScope = factory.Services.CreateScope();
+        var finalDb = finalScope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+        var failedNotification = await finalDb.NotificationDeliveryLogs
+            .AsNoTracking()
+            .SingleAsync(x => x.Id == failedNotificationId);
+
+        Assert.Null(failedNotification.ReadAtUtc);
     }
 
     private async Task<ReservationResponse> CreateReadyReservationAsync(string phoneNumber, string email, HttpClient? client = null)

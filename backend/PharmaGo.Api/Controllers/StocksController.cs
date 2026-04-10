@@ -549,11 +549,6 @@ public class StocksController(
         [FromBody] ReceiveStockRequest request,
         CancellationToken cancellationToken)
     {
-        if (request.QuantityReceived <= 0)
-        {
-            return ApiValidationProblem("stock_receive_invalid", "QuantityReceived must be greater than zero.");
-        }
-
         var stockItem = await LoadStockItemAsync(id, cancellationToken);
         if (stockItem is null)
         {
@@ -569,6 +564,12 @@ public class StocksController(
         if (stockItem.ExpirationDate < DateOnly.FromDateTime(DateTime.UtcNow))
         {
             return ApiValidationProblem("stock_receive_expired_batch", "Cannot receive stock into an expired batch.");
+        }
+
+        var receiveValidationError = ValidateReceiveRequest(request, stockItem);
+        if (receiveValidationError is not null)
+        {
+            return ApiValidationProblem("stock_receive_invalid", receiveValidationError);
         }
 
         var wasLowStock = stockItem.IsLowStock;
@@ -732,10 +733,23 @@ public class StocksController(
             return ApiValidationProblem("stock_active_reserved_conflict", "Stock item with reserved quantity cannot be deactivated.");
         }
 
+        var normalizedBatchNumber = request.BatchNumber.Trim();
+        var duplicateBatch = await context.StockItems.AnyAsync(
+            x => x.Id != id &&
+                x.PharmacyId == stockItem.PharmacyId &&
+                x.MedicineId == stockItem.MedicineId &&
+                x.BatchNumber == normalizedBatchNumber,
+            cancellationToken);
+
+        if (duplicateBatch)
+        {
+            return ApiConflict("stock_batch_duplicate", "A stock item with the same pharmacy, medicine and batch number already exists.");
+        }
+
         var wasLowStock = stockItem.IsLowStock;
         var beforeSnapshot = CreateStockAuditSnapshot(stockItem);
 
-        stockItem.BatchNumber = request.BatchNumber.Trim();
+        stockItem.BatchNumber = normalizedBatchNumber;
         stockItem.ExpirationDate = request.ExpirationDate;
         stockItem.Quantity = request.Quantity;
         stockItem.PurchasePrice = request.PurchasePrice;
@@ -874,9 +888,47 @@ public class StocksController(
             return "Prices cannot be negative.";
         }
 
+        if (retailPrice < purchasePrice)
+        {
+            return "RetailPrice cannot be lower than PurchasePrice.";
+        }
+
         if (reorderLevel < 0)
         {
             return "ReorderLevel cannot be negative.";
+        }
+
+        return null;
+    }
+
+    private static string? ValidateReceiveRequest(ReceiveStockRequest request, StockItem stockItem)
+    {
+        if (request.QuantityReceived <= 0)
+        {
+            return "QuantityReceived must be greater than zero.";
+        }
+
+        if (request.PurchasePrice.HasValue && request.PurchasePrice.Value < 0)
+        {
+            return "PurchasePrice cannot be negative.";
+        }
+
+        if (request.RetailPrice.HasValue && request.RetailPrice.Value < 0)
+        {
+            return "RetailPrice cannot be negative.";
+        }
+
+        if (request.ReorderLevel.HasValue && request.ReorderLevel.Value < 0)
+        {
+            return "ReorderLevel cannot be negative.";
+        }
+
+        var purchasePrice = request.PurchasePrice ?? stockItem.PurchasePrice;
+        var retailPrice = request.RetailPrice ?? stockItem.RetailPrice;
+
+        if (retailPrice < purchasePrice)
+        {
+            return "RetailPrice cannot be lower than PurchasePrice.";
         }
 
         return null;

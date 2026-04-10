@@ -1,6 +1,7 @@
 'use client'
 
 import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 import { useAuth } from '@pharmago/auth/client'
 import { Button, Card, CardContent, CardHeader, CardTitle, EmptyState, PageHeader, StatusBadge } from '@pharmago/ui'
 import { QueryStateCard } from '../../../../components/QueryStateCard'
@@ -9,6 +10,7 @@ import { formatDateTime } from '../../../../lib/format'
 
 export default function ProfilePage() {
   const auth = useAuth()
+  const router = useRouter()
   const profile = useProfile()
 
   if (profile.isPending) {
@@ -117,7 +119,7 @@ export default function ProfilePage() {
               className="w-full justify-start"
               onClick={async () => {
                 await auth.logout()
-                window.location.href = '/auth/login'
+                router.replace('/auth/login')
               }}
             >
               Logout

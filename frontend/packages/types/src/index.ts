@@ -206,8 +206,6 @@ export interface NotificationHistoryItem {
   reservationId?: string | null
   title: string
   message: string
-  payloadJson?: string | null
-  errorMessage?: string | null
   createdAtUtc: string
   deliveredAtUtc?: string | null
   readAtUtc?: string | null

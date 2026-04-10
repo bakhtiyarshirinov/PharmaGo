@@ -41,7 +41,7 @@ export async function writeAuthCookies(auth: AuthResponse, portal: Portal) {
     expiresAtUtc: auth.expiresAtUtc,
     user: auth.user,
   } satisfies AuthSession), {
-    httpOnly: false,
+    httpOnly: true,
     sameSite: 'lax',
     secure: false,
     path: '/',

@@ -1,6 +1,7 @@
 using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using PharmaGo.Application.Auth.Contracts;
@@ -142,6 +143,52 @@ public class MasterDataManagementTests(CustomWebApplicationFactory factory) : IC
 
         var response = await _client.GetAsync("/api/v1/admin/master-data/categories");
         Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task Moderator_ShouldRejectMissingGenericName_WhenCreatingMedicine()
+    {
+        var moderator = await LoginAsync("+994500000002", "Moderator123!");
+        _client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", moderator!.AccessToken);
+
+        var response = await _client.PostAsJsonAsync("/api/v1/admin/master-data/medicines", new CreateManagedMedicineRequest
+        {
+            BrandName = "Pulmovit",
+            GenericName = "   ",
+            DosageForm = "Syrup",
+            Strength = "30 mg/5 ml",
+            Manufacturer = "PharmaGo Labs",
+            RequiresPrescription = false,
+            IsActive = true
+        });
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+
+        var problem = await response.Content.ReadFromJsonAsync<ProblemDetails>();
+        Assert.NotNull(problem);
+        Assert.Equal("validation_error", problem!.Extensions["code"]?.ToString());
+    }
+
+    [Fact]
+    public async Task Moderator_ShouldRejectShortDepotContactPhone()
+    {
+        var moderator = await LoginAsync("+994500000002", "Moderator123!");
+        _client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", moderator!.AccessToken);
+
+        var response = await _client.PostAsJsonAsync("/api/admin/master-data/depots", new CreateManagedDepotRequest
+        {
+            Name = "Short Phone Depot",
+            Address = "Logistics street 1",
+            City = "Baku",
+            ContactPhone = "123",
+            IsActive = true
+        });
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+
+        var problem = await response.Content.ReadFromJsonAsync<ProblemDetails>();
+        Assert.NotNull(problem);
+        Assert.Equal("depot_contact_phone_invalid", problem!.Extensions["code"]?.ToString());
     }
 
     private async Task<AuthResponse?> LoginAsync(string phoneNumber, string password)

@@ -27,11 +27,13 @@ public class DashboardController(
         [FromQuery] Guid? pharmacyId,
         CancellationToken cancellationToken)
     {
-        var effectivePharmacyId = await GetEffectivePharmacyIdAsync(pharmacyId, cancellationToken);
-        if (effectivePharmacyId == Guid.Empty)
+        var scopeResult = await GetEffectivePharmacyScopeAsync(pharmacyId, cancellationToken);
+        if (!scopeResult.IsAllowed)
         {
             return ApiForbidden("You do not have access to the requested pharmacy dashboard scope.");
         }
+
+        var effectivePharmacyId = scopeResult.PharmacyId;
 
         var scopeVersion = await cacheService.GetScopeVersionAsync(CacheScopes.Dashboard, cancellationToken);
         var cacheKey = $"dashboard:summary:v{scopeVersion}:pharmacy={effectivePharmacyId?.ToString() ?? "all"}";
@@ -107,11 +109,13 @@ public class DashboardController(
         [FromQuery] Guid? pharmacyId,
         CancellationToken cancellationToken)
     {
-        var effectivePharmacyId = await GetEffectivePharmacyIdAsync(pharmacyId, cancellationToken);
-        if (effectivePharmacyId == Guid.Empty)
+        var scopeResult = await GetEffectivePharmacyScopeAsync(pharmacyId, cancellationToken);
+        if (!scopeResult.IsAllowed)
         {
             return ApiForbidden("You do not have access to the requested pharmacy dashboard scope.");
         }
+
+        var effectivePharmacyId = scopeResult.PharmacyId;
 
         var scopeVersion = await cacheService.GetScopeVersionAsync(CacheScopes.Dashboard, cancellationToken);
         var cacheKey = $"dashboard:recent:v{scopeVersion}:pharmacy={effectivePharmacyId?.ToString() ?? "all"}";
@@ -144,11 +148,13 @@ public class DashboardController(
         return Ok(reservations);
     }
 
-    private async Task<Guid?> GetEffectivePharmacyIdAsync(Guid? requestedPharmacyId, CancellationToken cancellationToken)
+    private async Task<(bool IsAllowed, Guid? PharmacyId)> GetEffectivePharmacyScopeAsync(
+        Guid? requestedPharmacyId,
+        CancellationToken cancellationToken)
     {
         if (User.IsInRole(RoleNames.Moderator))
         {
-            return requestedPharmacyId;
+            return (true, requestedPharmacyId);
         }
 
         var currentUser = await context.Users
@@ -157,14 +163,14 @@ public class DashboardController(
 
         if (currentUser?.PharmacyId is null)
         {
-            return Guid.Empty;
+            return (false, null);
         }
 
         if (requestedPharmacyId.HasValue && requestedPharmacyId.Value != currentUser.PharmacyId.Value)
         {
-            return Guid.Empty;
+            return (false, null);
         }
 
-        return currentUser.PharmacyId.Value;
+        return (true, currentUser.PharmacyId.Value);
     }
 }

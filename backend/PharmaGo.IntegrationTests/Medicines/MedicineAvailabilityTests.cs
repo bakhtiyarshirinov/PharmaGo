@@ -82,4 +82,18 @@ public class MedicineAvailabilityTests(CustomWebApplicationFactory factory) : IC
         var response = await _client.GetAsync($"/api/medicines/{medicineId}/availability?latitude=40.3777");
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
     }
+
+    [Fact]
+    public async Task GetAvailability_WithOutOfRangeLongitude_ShouldReturnBadRequest()
+    {
+        using var scope = factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+        var medicineId = await db.Medicines
+            .Where(x => x.BrandName == "Panadol")
+            .Select(x => x.Id)
+            .FirstAsync();
+
+        var response = await _client.GetAsync($"/api/medicines/{medicineId}/availability?latitude=40.3777&longitude=249.8920");
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
 }

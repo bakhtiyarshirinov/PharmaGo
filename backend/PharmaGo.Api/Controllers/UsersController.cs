@@ -124,6 +124,17 @@ public class UsersController(
         [FromBody] CreateManagedUserRequest request,
         CancellationToken cancellationToken)
     {
+        var fieldValidationError = ValidateManagedUserFields(
+            request.FirstName,
+            request.LastName,
+            request.PhoneNumber,
+            request.Password,
+            passwordRequired: true);
+        if (fieldValidationError is not null)
+        {
+            return fieldValidationError;
+        }
+
         var validationError = await ValidateRoleAndPharmacyAsync(request.Role, request.PharmacyId, cancellationToken);
         if (validationError is not null)
         {
@@ -192,6 +203,17 @@ public class UsersController(
         if (user is null)
         {
             return ApiNotFound("user_not_found", "User was not found.");
+        }
+
+        var fieldValidationError = ValidateManagedUserFields(
+            request.FirstName,
+            request.LastName,
+            request.PhoneNumber,
+            request.Password,
+            passwordRequired: false);
+        if (fieldValidationError is not null)
+        {
+            return fieldValidationError;
         }
 
         var validationError = await ValidateRoleAndPharmacyAsync(request.Role, request.PharmacyId, cancellationToken);
@@ -373,6 +395,53 @@ public class UsersController(
         return null;
     }
 
+    private ActionResult? ValidateManagedUserFields(
+        string firstName,
+        string lastName,
+        string phoneNumber,
+        string? password,
+        bool passwordRequired)
+    {
+        if (string.IsNullOrWhiteSpace(firstName))
+        {
+            return ApiValidationProblem("user_first_name_required", "FirstName is required.");
+        }
+
+        if (string.IsNullOrWhiteSpace(lastName))
+        {
+            return ApiValidationProblem("user_last_name_required", "LastName is required.");
+        }
+
+        if (string.IsNullOrWhiteSpace(phoneNumber))
+        {
+            return ApiValidationProblem("user_phone_required", "PhoneNumber is required.");
+        }
+
+        if (passwordRequired && string.IsNullOrWhiteSpace(password))
+        {
+            return ApiValidationProblem("user_password_required", "Password is required.");
+        }
+
+        if (string.IsNullOrWhiteSpace(password))
+        {
+            return null;
+        }
+
+        if (password.Length < 8)
+        {
+            return ApiValidationProblem("user_password_too_short", "Password must be at least 8 characters long.");
+        }
+
+        if (!IsPasswordComplexEnough(password))
+        {
+            return ApiValidationProblem(
+                "user_password_too_weak",
+                "Password must include at least one uppercase letter, one lowercase letter and one digit.");
+        }
+
+        return null;
+    }
+
     private static string? NormalizeEmail(string? email)
     {
         return string.IsNullOrWhiteSpace(email) ? null : email.Trim().ToLowerInvariant();
@@ -381,6 +450,36 @@ public class UsersController(
     private static string? NormalizeOptional(string? value)
     {
         return string.IsNullOrWhiteSpace(value) ? null : value.Trim();
+    }
+
+    private static bool IsPasswordComplexEnough(string password)
+    {
+        var hasUpper = false;
+        var hasLower = false;
+        var hasDigit = false;
+
+        foreach (var character in password)
+        {
+            if (char.IsUpper(character))
+            {
+                hasUpper = true;
+            }
+            else if (char.IsLower(character))
+            {
+                hasLower = true;
+            }
+            else if (char.IsDigit(character))
+            {
+                hasDigit = true;
+            }
+
+            if (hasUpper && hasLower && hasDigit)
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private static string NormalizeSortBy(string? sortBy)

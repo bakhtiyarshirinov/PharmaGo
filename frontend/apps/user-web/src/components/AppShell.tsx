@@ -1,7 +1,7 @@
 'use client'
 
 import Link from 'next/link'
-import { usePathname } from 'next/navigation'
+import { usePathname, useRouter } from 'next/navigation'
 import { useAuth } from '@pharmago/auth/client'
 import { userRoutes } from '@pharmago/config'
 import { Button } from '@pharmago/ui'
@@ -14,6 +14,7 @@ export function AppShell({
   actions?: React.ReactNode
 }) {
   const pathname = usePathname()
+  const router = useRouter()
   const auth = useAuth()
 
   const navItems = [
@@ -71,7 +72,7 @@ export function AppShell({
                   variant="ghost"
                   onClick={async () => {
                     await auth.logout()
-                    window.location.href = userRoutes.login
+                    router.replace(userRoutes.login)
                   }}
                 >
                   Logout

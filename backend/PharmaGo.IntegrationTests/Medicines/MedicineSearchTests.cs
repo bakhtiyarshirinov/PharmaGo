@@ -77,4 +77,11 @@ public class MedicineSearchTests(CustomWebApplicationFactory factory) : IClassFi
         var response = await _client.GetAsync("/api/medicines/search?query=pan&latitude=40.3777");
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
     }
+
+    [Fact]
+    public async Task Search_WithOutOfRangeLatitude_ShouldReturnBadRequest()
+    {
+        var response = await _client.GetAsync("/api/medicines/search?query=pan&latitude=140.3777&longitude=49.8920");
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
 }

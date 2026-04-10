@@ -51,4 +51,11 @@ public class PharmacyDiscoveryTests(CustomWebApplicationFactory factory) : IClas
         var response = await _client.GetAsync("/api/pharmacies/search?latitude=40.3777");
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
     }
+
+    [Fact]
+    public async Task SearchNearby_WithOutOfRangeLongitude_ShouldReturnBadRequest()
+    {
+        var response = await _client.GetAsync("/api/pharmacies/search?latitude=40.3777&longitude=249.8920");
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
 }

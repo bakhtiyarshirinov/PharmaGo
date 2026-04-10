@@ -2,6 +2,7 @@ using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Text.Json;
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using PharmaGo.Application.Auth.Contracts;
@@ -154,6 +155,28 @@ public class PharmacyManagementTests(CustomWebApplicationFactory factory) : ICla
 
         var response = await _client.GetAsync("/api/admin/pharmacies");
         Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task Moderator_ShouldRejectTooShortPhoneNumber_WhenCreatingManagedPharmacy()
+    {
+        var moderator = await LoginAsync("+994500000002", "Moderator123!");
+        _client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", moderator!.AccessToken);
+
+        var response = await _client.PostAsJsonAsync("/api/admin/pharmacies", new CreateManagedPharmacyRequest
+        {
+            Name = "Short Phone Pharmacy",
+            Address = "Test 2",
+            City = "Baku",
+            PhoneNumber = "123",
+            IsOpen24Hours = true
+        });
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+
+        var problem = await response.Content.ReadFromJsonAsync<ProblemDetails>();
+        Assert.NotNull(problem);
+        Assert.Equal("pharmacy_phone_invalid", problem!.Extensions["code"]?.ToString());
     }
 
     private async Task<AuthResponse?> LoginAsync(string phoneNumber, string password)

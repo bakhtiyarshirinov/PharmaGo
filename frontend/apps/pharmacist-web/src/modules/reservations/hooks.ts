@@ -18,7 +18,7 @@ export function useActiveReservations(pharmacyId?: string | null) {
 export function useReservationsByPharmacy(pharmacyId?: string | null, status?: number) {
   return useQuery({
     queryKey: queryKeys.reservations.byPharmacy(pharmacyId, status),
-    queryFn: () => browserApi.reservations.byPharmacy(pharmacyId!, status),
+    queryFn: () => browserApi.reservations.byPharmacy(requireValue(pharmacyId, 'pharmacyId'), status),
     enabled: Boolean(pharmacyId),
   })
 }
@@ -26,7 +26,7 @@ export function useReservationsByPharmacy(pharmacyId?: string | null, status?: n
 export function useReservationDetail(reservationId?: string) {
   return useQuery({
     queryKey: queryKeys.reservations.detail(reservationId),
-    queryFn: () => browserApi.reservations.detail(reservationId!),
+    queryFn: () => browserApi.reservations.detail(requireValue(reservationId, 'reservationId')),
     enabled: Boolean(reservationId),
   })
 }
@@ -34,7 +34,7 @@ export function useReservationDetail(reservationId?: string) {
 export function useReservationTimeline(reservationId?: string) {
   return useQuery({
     queryKey: queryKeys.reservations.timeline(reservationId),
-    queryFn: () => browserApi.reservations.timeline(reservationId!),
+    queryFn: () => browserApi.reservations.timeline(requireValue(reservationId, 'reservationId')),
     enabled: Boolean(reservationId),
   })
 }
@@ -81,4 +81,12 @@ export function useCompleteReservation() {
 
 export function useCancelReservation() {
   return useReservationTransition('Резерв отменен.', (reservationId) => browserApi.reservations.cancel(reservationId))
+}
+
+function requireValue(value: string | null | undefined, fieldName: string) {
+  if (!value) {
+    throw new Error(`${fieldName} is required`)
+  }
+
+  return value
 }

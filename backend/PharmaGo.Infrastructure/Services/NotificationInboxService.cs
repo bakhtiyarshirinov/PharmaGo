@@ -41,8 +41,6 @@ public class NotificationInboxService(ApplicationDbContext context) : INotificat
                 ReservationId = x.ReservationId,
                 Title = x.Title,
                 Message = x.Message,
-                PayloadJson = x.PayloadJson,
-                ErrorMessage = x.ErrorMessage,
                 CreatedAtUtc = x.CreatedAtUtc,
                 DeliveredAtUtc = x.DeliveredAtUtc,
                 ReadAtUtc = x.ReadAtUtc
@@ -81,8 +79,6 @@ public class NotificationInboxService(ApplicationDbContext context) : INotificat
                 ReservationId = x.ReservationId,
                 Title = x.Title,
                 Message = x.Message,
-                PayloadJson = x.PayloadJson,
-                ErrorMessage = x.ErrorMessage,
                 CreatedAtUtc = x.CreatedAtUtc,
                 DeliveredAtUtc = x.DeliveredAtUtc,
                 ReadAtUtc = x.ReadAtUtc
@@ -100,7 +96,11 @@ public class NotificationInboxService(ApplicationDbContext context) : INotificat
     public async Task<bool> MarkAsReadAsync(Guid userId, Guid notificationId, CancellationToken cancellationToken = default)
     {
         var notification = await context.NotificationDeliveryLogs
-            .FirstOrDefaultAsync(x => x.Id == notificationId && x.UserId == userId, cancellationToken);
+            .FirstOrDefaultAsync(
+                x => x.Id == notificationId &&
+                    x.UserId == userId &&
+                    x.Status == NotificationDeliveryStatus.Sent,
+                cancellationToken);
 
         if (notification is null)
         {
@@ -119,7 +119,11 @@ public class NotificationInboxService(ApplicationDbContext context) : INotificat
     public async Task<bool> MarkAsUnreadAsync(Guid userId, Guid notificationId, CancellationToken cancellationToken = default)
     {
         var notification = await context.NotificationDeliveryLogs
-            .FirstOrDefaultAsync(x => x.Id == notificationId && x.UserId == userId, cancellationToken);
+            .FirstOrDefaultAsync(
+                x => x.Id == notificationId &&
+                    x.UserId == userId &&
+                    x.Status == NotificationDeliveryStatus.Sent,
+                cancellationToken);
 
         if (notification is null)
         {
@@ -197,7 +201,7 @@ public class NotificationInboxService(ApplicationDbContext context) : INotificat
         }
 
         var notifications = await context.NotificationDeliveryLogs
-            .Where(x => x.UserId == userId && ids.Contains(x.Id))
+            .Where(x => x.UserId == userId && x.Status == NotificationDeliveryStatus.Sent && ids.Contains(x.Id))
             .ToListAsync(cancellationToken);
 
         var updatedCount = 0;

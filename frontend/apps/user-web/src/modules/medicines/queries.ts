@@ -32,7 +32,7 @@ export function usePopularMedicines(limit = 8) {
 export function useMedicineDetail(medicineId?: string) {
   return useQuery({
     queryKey: ['medicines', 'detail', medicineId],
-    queryFn: () => browserApi.medicines.detail(medicineId!),
+    queryFn: () => browserApi.medicines.detail(requireValue(medicineId, 'medicineId')),
     enabled: Boolean(medicineId),
   })
 }
@@ -40,7 +40,15 @@ export function useMedicineDetail(medicineId?: string) {
 export function useMedicineAvailability(medicineId?: string) {
   return useQuery({
     queryKey: ['medicines', 'availability', medicineId],
-    queryFn: () => browserApi.medicines.availability(medicineId!),
+    queryFn: () => browserApi.medicines.availability(requireValue(medicineId, 'medicineId')),
     enabled: Boolean(medicineId),
   })
+}
+
+function requireValue(value: string | undefined, fieldName: string) {
+  if (!value) {
+    throw new Error(`${fieldName} is required`)
+  }
+
+  return value
 }

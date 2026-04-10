@@ -50,22 +50,26 @@ public class AuthController(
             return ApiValidationProblem("auth_password_too_short", "Password must be at least 8 characters long.");
         }
 
+        if (!IsPasswordComplexEnough(request.Password))
+        {
+            return ApiValidationProblem(
+                "auth_password_too_weak",
+                "Password must include at least one uppercase letter, one lowercase letter and one digit.");
+        }
+
         var normalizedPhone = request.PhoneNumber.Trim();
         var normalizedEmail = request.Email?.Trim().ToLowerInvariant();
 
-        var phoneExists = await context.Users.AnyAsync(x => x.PhoneNumber == normalizedPhone, cancellationToken);
-        if (phoneExists)
-        {
-            return ApiConflict("auth_phone_already_exists", "A user with this phone number already exists.");
-        }
+        var accountExists = await context.Users.AnyAsync(
+            x => x.PhoneNumber == normalizedPhone ||
+                (!string.IsNullOrWhiteSpace(normalizedEmail) && x.Email == normalizedEmail),
+            cancellationToken);
 
-        if (!string.IsNullOrWhiteSpace(normalizedEmail))
+        if (accountExists)
         {
-            var emailExists = await context.Users.AnyAsync(x => x.Email == normalizedEmail, cancellationToken);
-            if (emailExists)
-            {
-                return ApiConflict("auth_email_already_exists", "A user with this email already exists.");
-            }
+            return ApiConflict(
+                "auth_account_already_exists",
+                "An account with the provided sign-in details already exists.");
         }
 
         var user = new AppUser
@@ -348,5 +352,35 @@ public class AuthController(
                 PharmacyId = user.PharmacyId
             }
         };
+    }
+
+    private static bool IsPasswordComplexEnough(string password)
+    {
+        var hasUpper = false;
+        var hasLower = false;
+        var hasDigit = false;
+
+        foreach (var character in password)
+        {
+            if (char.IsUpper(character))
+            {
+                hasUpper = true;
+            }
+            else if (char.IsLower(character))
+            {
+                hasLower = true;
+            }
+            else if (char.IsDigit(character))
+            {
+                hasDigit = true;
+            }
+
+            if (hasUpper && hasLower && hasDigit)
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 }

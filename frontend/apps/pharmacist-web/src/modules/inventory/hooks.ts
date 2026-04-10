@@ -17,7 +17,7 @@ import { queryKeys } from '../../lib/query-keys'
 export function useInventoryStock(pharmacyId?: string | null, lowStockOnly = false) {
   return useQuery({
     queryKey: queryKeys.inventory.stock(pharmacyId, lowStockOnly),
-    queryFn: () => browserApi.stocks.byPharmacy(pharmacyId!, { lowStockOnly }),
+    queryFn: () => browserApi.stocks.byPharmacy(requireValue(pharmacyId, 'pharmacyId'), { lowStockOnly }),
     enabled: Boolean(pharmacyId),
   })
 }
@@ -110,4 +110,12 @@ export function useWriteOffStockItem(stockItemId: string) {
   return useInventoryMutation<WriteOffStockInput>('Списание проведено.', (input) =>
     browserApi.stocks.writeoff(stockItemId, input),
   )
+}
+
+function requireValue(value: string | null | undefined, fieldName: string) {
+  if (!value) {
+    throw new Error(`${fieldName} is required`)
+  }
+
+  return value
 }

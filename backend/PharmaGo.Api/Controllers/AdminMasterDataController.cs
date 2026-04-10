@@ -272,6 +272,7 @@ public class AdminMasterDataController(
             request.CategoryId,
             request.Barcode,
             request.BrandName,
+            request.GenericName,
             request.DosageForm,
             request.Strength,
             request.Manufacturer,
@@ -356,6 +357,7 @@ public class AdminMasterDataController(
             request.CategoryId,
             request.Barcode,
             request.BrandName,
+            request.GenericName,
             request.DosageForm,
             request.Strength,
             request.Manufacturer,
@@ -673,6 +675,12 @@ public class AdminMasterDataController(
         [FromBody] CreateManagedDepotRequest request,
         CancellationToken cancellationToken)
     {
+        var fieldValidationError = ValidateDepotFields(request.Name, request.Address, request.City, request.ContactPhone);
+        if (fieldValidationError is not null)
+        {
+            return fieldValidationError;
+        }
+
         var normalizedName = request.Name.Trim();
         var normalizedCity = request.City.Trim();
         if (await context.Depots.AnyAsync(x => x.Name == normalizedName && x.City == normalizedCity, cancellationToken))
@@ -728,6 +736,12 @@ public class AdminMasterDataController(
         if (depot is null)
         {
             return ApiNotFound("depot_not_found", "Depot was not found.");
+        }
+
+        var fieldValidationError = ValidateDepotFields(request.Name, request.Address, request.City, request.ContactPhone);
+        if (fieldValidationError is not null)
+        {
+            return fieldValidationError;
         }
 
         var normalizedName = request.Name.Trim();
@@ -990,12 +1004,38 @@ public class AdminMasterDataController(
         Guid? categoryId,
         string? barcode,
         string brandName,
+        string genericName,
         string dosageForm,
         string strength,
         string manufacturer,
         Guid? currentMedicineId,
         CancellationToken cancellationToken)
     {
+        if (string.IsNullOrWhiteSpace(brandName))
+        {
+            return ApiValidationProblem("medicine_brand_name_required", "Brand name is required.");
+        }
+
+        if (string.IsNullOrWhiteSpace(genericName))
+        {
+            return ApiValidationProblem("medicine_generic_name_required", "Generic name is required.");
+        }
+
+        if (string.IsNullOrWhiteSpace(dosageForm))
+        {
+            return ApiValidationProblem("medicine_dosage_form_required", "Dosage form is required.");
+        }
+
+        if (string.IsNullOrWhiteSpace(strength))
+        {
+            return ApiValidationProblem("medicine_strength_required", "Strength is required.");
+        }
+
+        if (string.IsNullOrWhiteSpace(manufacturer))
+        {
+            return ApiValidationProblem("medicine_manufacturer_required", "Manufacturer is required.");
+        }
+
         if (categoryId.HasValue && !await context.MedicineCategories.AnyAsync(x => x.Id == categoryId.Value, cancellationToken))
         {
             return ApiNotFound("medicine_category_not_found", "Medicine category was not found.");
@@ -1022,6 +1062,36 @@ public class AdminMasterDataController(
                 cancellationToken))
         {
             return ApiConflict("medicine_already_exists", "A medicine with the same brand, dosage form, strength and manufacturer already exists.");
+        }
+
+        return null;
+    }
+
+    private static ActionResult? ValidateDepotFields(
+        string name,
+        string address,
+        string city,
+        string? contactPhone)
+    {
+        if (string.IsNullOrWhiteSpace(name))
+        {
+            return new BadRequestObjectResult(ApiProblemDetailsFactory.CreateValidationProblem("depot_name_required", "Depot name is required."));
+        }
+
+        if (string.IsNullOrWhiteSpace(address))
+        {
+            return new BadRequestObjectResult(ApiProblemDetailsFactory.CreateValidationProblem("depot_address_required", "Depot address is required."));
+        }
+
+        if (string.IsNullOrWhiteSpace(city))
+        {
+            return new BadRequestObjectResult(ApiProblemDetailsFactory.CreateValidationProblem("depot_city_required", "Depot city is required."));
+        }
+
+        var normalizedPhone = NormalizeOptional(contactPhone);
+        if (normalizedPhone is not null && normalizedPhone.Length < 7)
+        {
+            return new BadRequestObjectResult(ApiProblemDetailsFactory.CreateValidationProblem("depot_contact_phone_invalid", "Contact phone must be at least 7 characters long."));
         }
 
         return null;

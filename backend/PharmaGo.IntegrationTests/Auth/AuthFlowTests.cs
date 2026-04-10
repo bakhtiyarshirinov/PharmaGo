@@ -1,6 +1,7 @@
 using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.DependencyInjection;
 using PharmaGo.Application.Auth.Contracts;
 using PharmaGo.IntegrationTests.Infrastructure;
@@ -147,5 +148,69 @@ public class AuthFlowTests(CustomWebApplicationFactory factory) : IClassFixture<
 
         Assert.Equal(HttpStatusCode.Unauthorized, refreshFirst.StatusCode);
         Assert.Equal(HttpStatusCode.Unauthorized, refreshSecond.StatusCode);
+    }
+
+    [Fact]
+    public async Task Register_ShouldRejectWeakPassword()
+    {
+        var response = await _client.PostAsJsonAsync("/api/auth/register", new RegisterRequest
+        {
+            FirstName = "Weak",
+            LastName = "Password",
+            PhoneNumber = "+994551110010",
+            Email = "weak@example.com",
+            Password = "alllowercase1"
+        });
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+
+        var problem = await response.Content.ReadFromJsonAsync<ProblemDetails>();
+        Assert.NotNull(problem);
+        Assert.Equal("auth_password_too_weak", problem!.Extensions["code"]?.ToString());
+    }
+
+    [Fact]
+    public async Task Register_ShouldUseGenericConflict_WhenAccountAlreadyExists()
+    {
+        var initialResponse = await _client.PostAsJsonAsync("/api/auth/register", new RegisterRequest
+        {
+            FirstName = "Existing",
+            LastName = "User",
+            PhoneNumber = "+994551110011",
+            Email = "existing@example.com",
+            Password = "TestPassword123!"
+        });
+
+        Assert.Equal(HttpStatusCode.Created, initialResponse.StatusCode);
+
+        var duplicatePhoneResponse = await _client.PostAsJsonAsync("/api/auth/register", new RegisterRequest
+        {
+            FirstName = "Duplicate",
+            LastName = "Phone",
+            PhoneNumber = "+994551110011",
+            Email = "new-address@example.com",
+            Password = "TestPassword123!"
+        });
+
+        Assert.Equal(HttpStatusCode.Conflict, duplicatePhoneResponse.StatusCode);
+
+        var duplicatePhoneProblem = await duplicatePhoneResponse.Content.ReadFromJsonAsync<ProblemDetails>();
+        Assert.NotNull(duplicatePhoneProblem);
+        Assert.Equal("auth_account_already_exists", duplicatePhoneProblem!.Extensions["code"]?.ToString());
+
+        var duplicateEmailResponse = await _client.PostAsJsonAsync("/api/auth/register", new RegisterRequest
+        {
+            FirstName = "Duplicate",
+            LastName = "Email",
+            PhoneNumber = "+994551110012",
+            Email = "existing@example.com",
+            Password = "TestPassword123!"
+        });
+
+        Assert.Equal(HttpStatusCode.Conflict, duplicateEmailResponse.StatusCode);
+
+        var duplicateEmailProblem = await duplicateEmailResponse.Content.ReadFromJsonAsync<ProblemDetails>();
+        Assert.NotNull(duplicateEmailProblem);
+        Assert.Equal("auth_account_already_exists", duplicateEmailProblem!.Extensions["code"]?.ToString());
     }
 }

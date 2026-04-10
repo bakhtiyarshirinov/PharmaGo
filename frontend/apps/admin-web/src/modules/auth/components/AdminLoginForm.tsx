@@ -9,8 +9,8 @@ import { getApiErrorMessage } from '../../../lib/errors'
 export function AdminLoginForm() {
   const router = useRouter()
   const { login } = useAuth()
-  const [phoneNumber, setPhoneNumber] = useState('+994509990003')
-  const [password, setPassword] = useState('Moderator123!')
+  const [phoneNumber, setPhoneNumber] = useState('')
+  const [password, setPassword] = useState('')
   const [serverError, setServerError] = useState<string | null>(null)
   const [isPending, startTransition] = useTransition()
 
@@ -48,7 +48,7 @@ export function AdminLoginForm() {
               autoComplete="tel"
               value={phoneNumber}
               onChange={(event) => setPhoneNumber(event.target.value)}
-              placeholder="+994509990003"
+              placeholder="+994..."
             />
           </div>
 

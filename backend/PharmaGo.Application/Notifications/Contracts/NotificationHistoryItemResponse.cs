@@ -11,8 +11,6 @@ public class NotificationHistoryItemResponse
     public Guid? ReservationId { get; init; }
     public string Title { get; init; } = string.Empty;
     public string Message { get; init; } = string.Empty;
-    public string? PayloadJson { get; init; }
-    public string? ErrorMessage { get; init; }
     public DateTime CreatedAtUtc { get; init; }
     public DateTime? DeliveredAtUtc { get; init; }
     public DateTime? ReadAtUtc { get; init; }

@@ -30,8 +30,8 @@ export function PharmacistLoginForm() {
   const form = useForm<PharmacistLoginValues>({
     resolver: zodResolver(pharmacistLoginSchema),
     defaultValues: {
-      phoneNumber: '+994500000001',
-      password: 'Pharmacist123!',
+      phoneNumber: '',
+      password: '',
     },
   })
 
@@ -68,7 +68,7 @@ export function PharmacistLoginForm() {
             <Input
               id="phoneNumber"
               autoComplete="tel"
-              placeholder="+994500000001"
+              placeholder="+994..."
               {...form.register('phoneNumber')}
             />
             {form.formState.errors.phoneNumber ? (

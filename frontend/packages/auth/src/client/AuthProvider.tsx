@@ -2,7 +2,7 @@
 
 import { createContext, useContext, useEffect, useMemo, useRef } from 'react'
 import type { AuthSession } from '@pharmago/types'
-import { getAuthCookieNames, type AuthPortal } from '@pharmago/config'
+import type { AuthPortal } from '@pharmago/config'
 import { useAuthStore } from './store'
 
 interface AuthContextValue {
@@ -25,33 +25,13 @@ async function postJson<T>(url: string, body?: unknown): Promise<T> {
     body: body ? JSON.stringify(body) : undefined,
   })
 
+  const payload = await readJsonSafely(response)
+
   if (!response.ok) {
-    throw await response.json()
+    throw createResponseError(payload, response.statusText)
   }
 
-  return response.json() as Promise<T>
-}
-
-function getSessionFromCookie(portal: AuthPortal): AuthSession | null {
-  if (typeof document === 'undefined') {
-    return null
-  }
-
-  const cookieNames = getAuthCookieNames(portal)
-  const rawCookie = document.cookie
-    .split('; ')
-    .find((entry) => entry.startsWith(`${cookieNames.sessionMeta}=`))
-    ?.slice(cookieNames.sessionMeta.length + 1)
-
-  if (!rawCookie) {
-    return null
-  }
-
-  try {
-    return JSON.parse(decodeURIComponent(rawCookie)) as AuthSession
-  } catch {
-    return null
-  }
+  return payload as T
 }
 
 export function AuthProvider({
@@ -76,8 +56,11 @@ export function AuthProvider({
       return nextSession
     },
     async logout() {
-      await postJson<void>('/api/auth/logout')
-      setSession(null)
+      try {
+        await postJson<void>('/api/auth/logout')
+      } finally {
+        setSession(null)
+      }
     },
     async refreshSession() {
       if (refreshInFlight.current) {
@@ -85,12 +68,6 @@ export function AuthProvider({
       }
 
       const refreshPromise = (async () => {
-        const cookieSession = getSessionFromCookie(portal)
-
-        if (cookieSession && !useAuthStore.getState().session) {
-          setSession(cookieSession)
-        }
-
         const response = await fetch('/api/auth/session', {
           credentials: 'include',
           cache: 'no-store',
@@ -101,11 +78,13 @@ export function AuthProvider({
           return null
         }
 
+        const payload = await readJsonSafely(response)
+
         if (!response.ok) {
-          throw await response.json()
+          throw createResponseError(payload, response.statusText)
         }
 
-        const nextSession = await response.json() as AuthSession
+        const nextSession = payload as AuthSession
         setSession(nextSession)
         return nextSession
       })()
@@ -121,12 +100,6 @@ export function AuthProvider({
   }), [isHydrating, portal, session, setSession])
 
   useEffect(() => {
-    const cookieSession = getSessionFromCookie(portal)
-
-    if (cookieSession && !session) {
-      setSession(cookieSession)
-    }
-
     api.refreshSession()
       .catch(() => {
         setSession(null)
@@ -183,4 +156,30 @@ export function useAuth() {
   }
 
   return context
+}
+
+async function readJsonSafely(response: Response): Promise<unknown> {
+  const raw = await response.text()
+
+  if (!raw) {
+    return null
+  }
+
+  try {
+    return JSON.parse(raw)
+  } catch {
+    return { detail: raw }
+  }
+}
+
+function createResponseError(payload: unknown, fallbackMessage: string) {
+  if (payload instanceof Error) {
+    return payload
+  }
+
+  if (payload && typeof payload === 'object') {
+    return payload
+  }
+
+  return new Error(fallbackMessage || 'Request failed')
 }
